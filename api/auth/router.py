@@ -23,7 +23,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         name=data.name,
         email=data.email,
         phone=data.phone,
-        password_hash=hash_password(data.password),
+        hashed_password=hash_password(data.password),
         role=data.role,
     )
     db.add(user)
@@ -38,7 +38,7 @@ def login(
 ):
     """Login — retorna JWT. Funciona no Swagger (botão Authorize)."""
     user = db.query(User).filter(User.email == form.username).first()
-    if not user or not verify_password(form.password, user.password_hash):
+    if not user or not verify_password(form.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
     
     if not user.is_active:
