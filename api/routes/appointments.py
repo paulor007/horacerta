@@ -157,6 +157,14 @@ def create_appointment(
     db.commit()
     db.refresh(appointment)
 
+    # Dispara notificação em background (Celery)
+    try:
+        from tasks.reminders import notify_new_appointment
+        notify_new_appointment.delay(appointment.id)
+    except Exception:
+        # Se Celery não estiver rodando, ignora (não impede agendamento)
+        pass
+
     return _enrich_appointment(appointment, db)
 
 
@@ -348,3 +356,26 @@ def noshow_appointment(
     db.refresh(apt)
 
     return _enrich_appointment(apt, db)
+
+# ── Teste de notificação (dev) ──
+
+@router.post("/{appointment_id}/notify")
+def test_notify(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("admin")),
+):
+    """
+    (Dev) Dispara notificação manualmente para um agendamento.
+    Útil para testar email/WhatsApp sem esperar o Celery Beat.
+    """
+    apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not apt:
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado")
+
+    try:
+        from tasks.reminders import notify_new_appointment
+        result = notify_new_appointment(appointment_id)  # Síncrono (sem .delay)
+        return {"message": "Notificação enviada", "result": result}
+    except Exception as e:
+        return {"message": "Erro ao notificar", "error": str(e)}
