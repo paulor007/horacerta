@@ -8,6 +8,7 @@ Fluxo:
 4. Profissional vê agenda do dia (GET /today)
 5. Profissional marca concluído ou no-show
 """
+import asyncio
 
 from datetime import datetime, timedelta
 from datetime import date as date_type
@@ -28,6 +29,7 @@ from schemas.appointment import (
     TimeSlot,
 )
 from services.availability import get_available_slots, check_conflict
+from websocket.manager import ws_manager
 
 router = APIRouter(prefix="/api/v1/appointments", tags=["Agendamentos"])
 
@@ -165,6 +167,26 @@ def create_appointment(
         # Se Celery não estiver rodando, ignora (não impede agendamento)
         pass
 
+    # Broadcast WebSocket (tempo real)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.ensure_future(ws_manager.broadcast_appointment_event(
+                "new",
+                appointment.professional_id,
+                {
+                    "id": appointment.id,
+                    "client_name": user.name,
+                    "service": service.name,
+                    "date": str(appointment.date),
+                    "start_time": str(appointment.start_time),
+                    "end_time": str(appointment.end_time),
+                },
+            ))
+    except Exception:
+        # Se WebSocket falhar, ignora (não impede agendamento)
+        pass
+
     return _enrich_appointment(appointment, db)
 
 
@@ -204,6 +226,17 @@ def cancel_appointment(
 
     apt.status = "cancelled"
     db.commit()
+
+    # Broadcast WebSocket
+    try:
+        asyncio.ensure_future(ws_manager.broadcast_appointment_event(
+            "cancelled",
+            apt.professional_id,
+            {"id": appointment_id},
+        ))
+    except Exception:
+        # Se WebSocket falhar, ignora (não impede agendamento)
+        pass
 
     return {"message": "Agendamento cancelado", "id": appointment_id}
 
@@ -332,6 +365,17 @@ def complete_appointment(
     db.commit()
     db.refresh(apt)
 
+    # Broadcast WebSocket
+    try:
+        import asyncio
+        asyncio.ensure_future(ws_manager.broadcast_appointment_event(
+            "completed",
+            apt.professional_id,
+            {"id": appointment_id},
+        ))
+    except Exception:
+        pass
+
     return _enrich_appointment(apt, db)
 
 
@@ -354,6 +398,17 @@ def noshow_appointment(
     apt.status = "no_show"
     db.commit()
     db.refresh(apt)
+
+    # Broadcast WebSocket
+    try:
+        import asyncio
+        asyncio.ensure_future(ws_manager.broadcast_appointment_event(
+            "no_show",
+            apt.professional_id,
+            {"id": appointment_id},
+        ))
+    except Exception:
+        pass
 
     return _enrich_appointment(apt, db)
 

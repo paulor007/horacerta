@@ -9,6 +9,7 @@ from api.routes.services import router as services_router
 from api.routes.users import router as users_router
 from api.routes.appointments import router as appointments_router
 from api.routes.reports import router as reports_router
+from websocket.routes import router as ws_router
 
 app = FastAPI(
     title="HoraCerta",
@@ -16,7 +17,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,24 +25,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Rotas
 app.include_router(auth_router)
 app.include_router(professionals_router)
 app.include_router(services_router)
 app.include_router(users_router)
 app.include_router(appointments_router)
 app.include_router(reports_router)
+app.include_router(ws_router)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "HoraCerta"}
+    from websocket.manager import ws_manager
+    return {
+        "status": "ok",
+        "service": "HoraCerta",
+        "websocket_connections": ws_manager.total_connections,
+    }
 
 
 @app.get("/")
 def root():
-    return {
-        "app": "HoraCerta",
-        "version": "0.1.0",
-        "docs": "/docs",
-    }
+    return {"app": "HoraCerta", "version": "0.1.0", "docs": "/docs"}
