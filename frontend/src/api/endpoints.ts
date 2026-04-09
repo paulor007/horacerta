@@ -26,6 +26,11 @@ export const getAvailability = (
     `/api/v1/appointments/available?professional_id=${profId}&date=${date}&service_id=${serviceId}`,
   );
 
+export const getMyAppointments = (status?: string) => {
+  const params = status ? `?status=${status}` : "";
+  return api.get<Appointment[]>(`/api/v1/appointments/my${params}`);
+};
+
 export const createAppointment = (data: {
   professional_id: number;
   service_id: number;
