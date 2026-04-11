@@ -15,6 +15,7 @@ app = FastAPI(
     title="HoraCerta",
     description="Agendamento Inteligente para Profissionais de Serviço",
     version="0.1.0",
+    redirect_slashes=False,
 )
 
 app.add_middleware(

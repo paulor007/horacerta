@@ -11,7 +11,7 @@ from schemas.service import ServiceCreate, ServiceUpdate, ServiceResponse
 router = APIRouter(prefix="/api/v1/services", tags=["Serviços"])
 
 
-@router.get("/", response_model=list[ServiceResponse])
+@router.get("", response_model=list[ServiceResponse])
 def list_services(
     active_only: bool = Query(True),
     db: Session = Depends(get_db),
@@ -37,7 +37,7 @@ def get_service(
     return svc
 
 
-@router.post("/", response_model=ServiceResponse, status_code=201)
+@router.post("", response_model=ServiceResponse, status_code=201)
 def create_service(
     data: ServiceCreate,
     db: Session = Depends(get_db),

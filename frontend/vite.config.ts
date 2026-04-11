@@ -11,7 +11,7 @@ export default defineConfig({
       "/auth": "http://localhost:8000",
       "/health": "http://localhost:8000",
       "/ws": {
-        target: "ws://localhost:8000",
+        target: "http://localhost:8000",
         ws: true,
       },
     },

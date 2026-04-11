@@ -22,9 +22,10 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     # Verificar lembretes a cada 30 minutos
     "check-reminders-every-30-min": {
-        "task": "tasks.reminder.send_pending_reminders",
+        "task": "tasks.reminders.send_pending_reminders",
         "schedule": crontab(minute="*/30"),
     },
+
     # Marcar no-shows diariamente às 22h
     "mark-no-shows-daily": {
         "task": "tasks.reminders.mark_noshows",

@@ -10,9 +10,12 @@ Cada profissional se conecta identificando seu ID.
 O broadcast é filtrado: só profissionais afetados recebem a mensagem.
 """
 
+import logging
 from fastapi import WebSocket
 
-class ConnectioManager:
+logger = logging.getLogger(__name__)
+
+class ConnectionManager:
     """Gerencia conexões WebSocket ativas."""
     def __init__(self):
         # Mapa: professional_id → lista de conexões
@@ -20,29 +23,31 @@ class ConnectioManager:
         # Conexões de admin
         self.admin_connections: list[WebSocket] = []
 
+
     async def connect(self, websocket: WebSocket, professional_id: int | None = None, is_admin: bool = False):
         """Aceita nova conexão WebSocket."""
         await websocket.accept()
-
         if is_admin:
             self.admin_connections.append(websocket)
         elif professional_id:
             if professional_id not in self.active_connections:
                 self.active_connections[professional_id] = []
             self.active_connections[professional_id].append(websocket)
-            print(f" [WS] Profissional {professional_id} conectado. Total conexões: {len(self.active_connections[professional_id])}")
+            logger.info("WS: Profissional %d conectado (%d conexões)", professional_id, len(self.active_connections[professional_id]))
 
     def disconnect(self, websocket: WebSocket, professional_id: int | None = None, is_admin: bool = False):
         """Remove conexão ao desconectar."""
         if is_admin and websocket in self.admin_connections:
             self.admin_connections.remove(websocket)
-            print("  [WS] Admin desconectado.")
+            logger.info("WS: Admin desconectado")
         elif professional_id and professional_id in self.active_connections:
-            if websocket in self.active_connections[professional_id]:
-                self.active_connections[professional_id].remove(websocket)
-            if not self.active_connections[professional_id]:
+            conns = self.active_connections[professional_id]
+            if websocket in conns:
+                conns.remove(websocket)
+            if not conns:
                 del self.active_connections[professional_id]
-            print(f"  [WS] Profissional {professional_id} desconectado.")
+            logger.info("WS: Profissional %d desconectado", professional_id)
+
 
     async def broadcast_to_professional(self, professional_id: int, message: dict):
         """Envia mensagem para um profissional específico."""
@@ -70,6 +75,7 @@ class ConnectioManager:
         for ws in dead:
             self.admin_connections.remove(ws)
 
+
     async def broadcast_appointment_event(self, event_type: str, professional_id: int, data: dict):
         """
         Broadcast de evento de agendamento.
@@ -88,12 +94,13 @@ class ConnectioManager:
         # Enviar para todos os admins
         await self.broadcast_to_admins(message)
 
-        print(f"  [WS] Broadcast: {event_type} para profissional {professional_id}")
+        logger.info("WS Broadcast: %s para profissional %d", event_type, professional_id)
 
     @property
     def total_connections(self) -> int:
         total = sum(len(conns) for conns in self.active_connections.values())
         return total + len(self.admin_connections)
 
+
 # Instância global (singleton)
-ws_manager = ConnectioManager()
+ws_manager = ConnectionManager()

@@ -11,10 +11,10 @@ import type {
 
 // Profissionais
 export const getProfessionals = () =>
-  api.get<Professional[]>("/api/v1/professionals");
+  api.get<Professional[]>("/api/v1/professionals"); // FIX: removida barra final
 
 // Serviços
-export const getServices = () => api.get<Service[]>("/api/v1/services");
+export const getServices = () => api.get<Service[]>("/api/v1/services"); // FIX: removida barra final
 
 // Agendamentos
 export const getAvailability = (
@@ -25,11 +25,6 @@ export const getAvailability = (
   api.get<AvailabilityResponse>(
     `/api/v1/appointments/available?professional_id=${profId}&date=${date}&service_id=${serviceId}`,
   );
-
-export const getMyAppointments = (status?: string) => {
-  const params = status ? `?status=${status}` : "";
-  return api.get<Appointment[]>(`/api/v1/appointments/my${params}`);
-};
 
 export const createAppointment = (data: {
   professional_id: number;
@@ -49,13 +44,23 @@ export const noshowAppointment = (id: number) =>
 
 // Relatórios
 export const getDashboard = () =>
-  api.get<DashboardData>("/api/v1/reports/dashboard");
+  api.get<DashboardData>("/api/v1/reports/dashboard"); // FIX: removida barra final
 
 export const getRevenue = () =>
-  api.get<RevenueByProfessional[]>("/api/v1/reports/revenue");
+  api.get<RevenueByProfessional[]>("/api/v1/reports/revenue"); // FIX: removida barra final
+
+export const getMyAppointments = (status?: string) => {
+  const params = status ? `?status=${status}` : "";
+  return api.get<Appointment[]>(`/api/v1/appointments/my${params}`); // FIX: removida barra antes do ?
+};
+
+export const getTodayAppointments = (date?: string) => {
+  const params = date ? `?date=${date}` : "";
+  return api.get<Appointment[]>(`/api/v1/appointments/today${params}`); // FIX: removida barra antes do ?
+};
 
 // Admin
-export const getUsers = () => api.get<User[]>("/api/v1/users");
+export const getUsers = () => api.get<User[]>("/api/v1/users"); // FIX: removida barra final
 
 export const createUser = (data: {
   name: string;

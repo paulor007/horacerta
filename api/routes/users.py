@@ -11,7 +11,7 @@ from schemas.auth import RegisterRequest, UserResponse
 router = APIRouter(prefix="/api/v1/users", tags=["Usuários (Admin)"])
 
 
-@router.get("/", response_model=list[UserResponse])
+@router.get("", response_model=list[UserResponse])
 def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -22,7 +22,7 @@ def list_users(
     return db.query(User).offset(skip).limit(limit).all()
 
 
-@router.post("/", response_model=UserResponse, status_code=201)
+@router.post("", response_model=UserResponse, status_code=201)
 def create_user(
     data: RegisterRequest,
     db: Session = Depends(get_db),
