@@ -11,10 +11,26 @@ import type {
 
 // Profissionais
 export const getProfessionals = () =>
-  api.get<Professional[]>("/api/v1/professionals"); // FIX: removida barra final
+  api.get<Professional[]>("/api/v1/professionals");
+
+export const createProfessional = (data: {
+  user_id: number;
+  specialty?: string;
+  bio?: string;
+  work_start?: string;
+  work_end?: string;
+  work_days?: string;
+}) => api.post<Professional>("/api/v1/professionals", data);
 
 // Serviços
-export const getServices = () => api.get<Service[]>("/api/v1/services"); // FIX: removida barra final
+export const getServices = () => api.get<Service[]>("/api/v1/services");
+
+export const createService = (data: {
+  name: string;
+  duration_min: number;
+  price: number;
+  description?: string;
+}) => api.post<Service>("/api/v1/services", data);
 
 // Agendamentos
 export const getAvailability = (
@@ -42,25 +58,30 @@ export const completeAppointment = (id: number) =>
 export const noshowAppointment = (id: number) =>
   api.put<Appointment>(`/api/v1/appointments/${id}/no-show`);
 
-// Relatórios
-export const getDashboard = () =>
-  api.get<DashboardData>("/api/v1/reports/dashboard"); // FIX: removida barra final
-
-export const getRevenue = () =>
-  api.get<RevenueByProfessional[]>("/api/v1/reports/revenue"); // FIX: removida barra final
-
 export const getMyAppointments = (status?: string) => {
   const params = status ? `?status=${status}` : "";
-  return api.get<Appointment[]>(`/api/v1/appointments/my${params}`); // FIX: removida barra antes do ?
+  return api.get<Appointment[]>(`/api/v1/appointments/my${params}`);
 };
 
 export const getTodayAppointments = (date?: string) => {
   const params = date ? `?date=${date}` : "";
-  return api.get<Appointment[]>(`/api/v1/appointments/today${params}`); // FIX: removida barra antes do ?
+  return api.get<Appointment[]>(`/api/v1/appointments/today${params}`);
 };
 
+// Relatórios
+export const getDashboard = () =>
+  api.get<DashboardData>("/api/v1/reports/dashboard");
+
+export const getRevenue = () =>
+  api.get<RevenueByProfessional[]>("/api/v1/reports/revenue");
+
+export const getOccupancy = (days: number = 7) =>
+  api.get<{ date: string; total: number; completed: number; rate: number }[]>(
+    `/api/v1/reports/occupancy?days=${days}`,
+  );
+
 // Admin
-export const getUsers = () => api.get<User[]>("/api/v1/users"); // FIX: removida barra final
+export const getUsers = () => api.get<User[]>("/api/v1/users");
 
 export const createUser = (data: {
   name: string;
@@ -69,3 +90,6 @@ export const createUser = (data: {
   password: string;
   role: string;
 }) => api.post("/api/v1/users", data);
+
+export const toggleUserActive = (id: number) =>
+  api.put<{ message: string }>(`/api/v1/users/${id}/toggle-active`);
