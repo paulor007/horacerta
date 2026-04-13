@@ -8,6 +8,7 @@ import MyAppointments from "./pages/MyAppointments";
 import Agenda from "./pages/Agenda";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
+import PublicBooking from "./pages/PublicBooking";
 
 function AppContent() {
   return (
@@ -37,6 +38,10 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          {/* Rota pública — agendamento sem login */}
+          <Route path="/agendar" element={<PublicBooking />} />
+
+          {/* Rotas autenticadas */}
           <Route path="/login" element={<Login />} />
           <Route
             path="/"

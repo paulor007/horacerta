@@ -9,12 +9,13 @@ from api.routes.services import router as services_router
 from api.routes.users import router as users_router
 from api.routes.appointments import router as appointments_router
 from api.routes.reports import router as reports_router
+from api.routes.public import router as public_router
 from websocket.routes import router as ws_router
 
 app = FastAPI(
     title="HoraCerta",
     description="Agendamento Inteligente para Profissionais de Serviço",
-    version="0.1.0",
+    version="0.3.0",
     redirect_slashes=False,
 )
 
@@ -32,6 +33,7 @@ app.include_router(services_router)
 app.include_router(users_router)
 app.include_router(appointments_router)
 app.include_router(reports_router)
+app.include_router(public_router)
 app.include_router(ws_router)
 
 
@@ -47,4 +49,4 @@ def health():
 
 @app.get("/")
 def root():
-    return {"app": "HoraCerta", "version": "0.1.0", "docs": "/docs"}
+    return {"app": "HoraCerta", "version": "0.3.0", "docs": "/docs"}
