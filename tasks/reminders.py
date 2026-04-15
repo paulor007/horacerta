@@ -26,16 +26,12 @@ from services.notification import (
 
 @celery_app.task(name="tasks.reminders.send_pending_reminders")
 def send_pending_reminders():
-    """
-    Verifica agendamentos das próximas 24h e envia lembrete.
-    Roda a cada 30 minutos via Celery Beat.
-    """
+    """Verifica agendamentos das próximas 24h e envia lembrete."""
     db = SessionLocal()
     try:
         now = datetime.now()
         tomorrow = now + timedelta(hours=24)
 
-        # Buscar agendamentos entre agora e 24h que ainda não receberam lembrete
         appointments = (
             db.query(Appointment)
             .filter(
@@ -47,7 +43,6 @@ def send_pending_reminders():
 
         sent_count = 0
         for apt in appointments:
-            # Verificar se já enviou lembrete
             existing = (
                 db.query(Notification)
                 .filter(
@@ -60,7 +55,6 @@ def send_pending_reminders():
             if existing:
                 continue
 
-            # Buscar dados
             client = db.query(User).filter(User.id == apt.client_id).first()
             prof = db.query(Professional).filter(Professional.id == apt.professional_id).first()
             prof_user = db.query(User).filter(User.id == prof.user_id).first() if prof else None
@@ -72,7 +66,6 @@ def send_pending_reminders():
             date_str = apt.date.strftime("%d/%m/%Y")
             time_str = apt.start_time.strftime("%H:%M")
 
-            # Montar mensagem
             messages = build_reminder_message(
                 client_name=client.name,
                 service_name=service_name,
@@ -81,11 +74,9 @@ def send_pending_reminders():
                 time_str=time_str,
             )
 
-            # Enviar email
             email_ok = send_email(client.email, "Lembrete de Agendamento — HoraCerta", messages["email"])
             register_notification(apt.id, "reminder", "email", email_ok)
 
-            # Enviar WhatsApp (se tiver telefone)
             if client.phone:
                 wp_ok = send_whatsapp(client.phone, messages["whatsapp"])
                 register_notification(apt.id, "reminder", "whatsapp", wp_ok)
@@ -104,16 +95,12 @@ def send_pending_reminders():
 
 @celery_app.task(name="tasks.reminders.mark_noshows")
 def mark_noshows():
-    """
-    Marca como no_show agendamentos passados que não foram concluídos.
-    Roda diariamente às 22h via Celery Beat.
-    """
+    """Marca como no_show agendamentos passados que não foram concluídos."""
     db = SessionLocal()
     try:
         today = date.today()
         now_time = datetime.now().time()
 
-        # Agendamentos de hoje que já passaram e ainda estão scheduled
         noshows = (
             db.query(Appointment)
             .filter(
@@ -142,10 +129,10 @@ def mark_noshows():
 
 
 @celery_app.task(name="tasks.reminders.notify_new_appointment")
-def notify_new_appointment(appointment_id: int):
+def notify_new_appointment(appointment_id: int, client_password: str | None = None):
     """
     Envia confirmação ao cliente + aviso ao profissional.
-    Chamada imediatamente após criar agendamento.
+    Se client_password for fornecido, inclui credenciais de acesso na mensagem.
     """
     db = SessionLocal()
     try:
@@ -164,16 +151,22 @@ def notify_new_appointment(appointment_id: int):
         date_str = apt.date.strftime("%d/%m/%Y")
         time_str = apt.start_time.strftime("%H:%M")
 
-        # ── Notificar CLIENTE (confirmação) ──
+        # ── Notificar CLIENTE (confirmação + senha se novo) ──
         client_msgs = build_confirmation_message(
             client_name=client.name,
             service_name=service_name,
             professional_name=prof_user.name,
             date_str=date_str,
             time_str=time_str,
+            client_password=client_password,
+            client_email=client.email if client_password else None,
         )
 
-        email_ok = send_email(client.email, "Agendamento Confirmado — HoraCerta", client_msgs["email"])
+        subject = "Agendamento Confirmado — HoraCerta"
+        if client_password:
+            subject = "Agendamento Confirmado + Seus Dados de Acesso — HoraCerta"
+
+        email_ok = send_email(client.email, subject, client_msgs["email"])
         register_notification(apt.id, "confirmation", "email", email_ok)
 
         if client.phone:
@@ -196,11 +189,10 @@ def notify_new_appointment(appointment_id: int):
             wp_ok = send_whatsapp(prof_user.phone, prof_msgs["whatsapp"])
             register_notification(apt.id, "new_appointment", "whatsapp", wp_ok)
 
-        return {"client_notified": True, "professional_notified": True}
+        return {"client_notified": True, "professional_notified": True, "password_sent": bool(client_password)}
 
     except Exception as e:
         print(f"  [NOTIFY] Erro: {e}")
         return {"error": str(e)}
     finally:
         db.close()
-

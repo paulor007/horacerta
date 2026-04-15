@@ -3,16 +3,18 @@ import { useAuth } from "../../context/AuthContext";
 import Sidebar from "./Sidebar";
 
 interface LayoutProps {
-  children: (activePage: string) => React.ReactNode;
+  children: (
+    activePage: string,
+    setActivePage: (page: string) => void,
+  ) => React.ReactNode;
 }
 
 export default function Layout({ children }: LayoutProps) {
   const { user } = useAuth();
 
-  // Página inicial por role
   const defaultPage =
     user?.role === "client"
-      ? "book"
+      ? "my-appointments"
       : user?.role === "professional"
         ? "agenda"
         : "dashboard";
@@ -23,7 +25,7 @@ export default function Layout({ children }: LayoutProps) {
     <div className="flex min-h-screen bg-slate-950">
       <Sidebar active={activePage} onNavigate={setActivePage} />
       <main className="flex-1 overflow-auto">
-        <div className="p-8">{children(activePage)}</div>
+        <div className="p-8">{children(activePage, setActivePage)}</div>
       </main>
     </div>
   );

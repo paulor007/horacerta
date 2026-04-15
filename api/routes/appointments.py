@@ -294,7 +294,15 @@ def my_appointments(
     user: User = Depends(get_current_user),
 ):
     """Meus agendamentos (cliente logado)."""
-    query = db.query(Appointment).filter(Appointment.client_id == user.id)
+    query = (
+        db.query(Appointment)
+        .options(
+            joinedload(Appointment.professional).joinedload(Professional.user),
+            joinedload(Appointment.service),
+            joinedload(Appointment.client),
+        )
+        .filter(Appointment.client_id == user.id)
+    )
     if status:
         query = query.filter(Appointment.status == status)
     query = query.order_by(Appointment.date.desc(), Appointment.start_time.desc())
@@ -323,9 +331,17 @@ def today_appointments(
         prof = db.query(Professional).filter(Professional.user_id == user.id).first()
         if not prof:
             raise HTTPException(status_code=404, detail="Perfil profissional não encontrado")
-        query = db.query(Appointment).filter(
-            Appointment.professional_id == prof.id,
-            Appointment.date == target_date,
+        query = (
+            db.query(Appointment)
+            .options(
+                joinedload(Appointment.professional).joinedload(Professional.user),
+                joinedload(Appointment.service),
+                joinedload(Appointment.client),
+            )
+            .filter(
+                Appointment.professional_id == prof.id,
+                Appointment.date == target_date,
+            )
         )
     elif user.role == "admin":
         query = db.query(Appointment).filter(Appointment.date == target_date)

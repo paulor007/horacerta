@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Clock, LogIn } from "lucide-react";
+import { Clock, LogIn, CalendarPlus } from "lucide-react";
 
 export default function Login() {
-  const [email, setEmail] = useState("demo@horacerta.com");
-  const [password, setPassword] = useState("demo123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -20,7 +20,7 @@ export default function Login() {
     setLoading(false);
 
     if (ok) {
-      navigate("/");
+      navigate("/painel");
     } else {
       setError("Email ou senha incorretos.");
     }
@@ -35,18 +35,11 @@ export default function Login() {
             <Clock className="w-8 h-8 text-emerald-500" />
           </div>
           <h1 className="text-3xl font-bold text-white">HoraCerta</h1>
-          <p className="text-slate-400 mt-2">
-            Agendamento para Profissionais de Serviço
-          </p>
-          <p className="text-slate-500 text-sm mt-1">
-            Barbearia Horizonte • Celery + WebSocket + React
-          </p>
+          <p className="text-slate-400 mt-2">Acesse sua conta</p>
         </div>
 
         {/* Form */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
-          <h2 className="text-xl font-semibold text-white mb-6">Login</h2>
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm text-slate-400 mb-1.5">
@@ -56,6 +49,7 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
                 required
               />
@@ -68,6 +62,7 @@ export default function Login() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="Sua senha"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
                 required
               />
@@ -95,20 +90,18 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Credenciais demo */}
-          <div className="mt-6 pt-6 border-t border-slate-800">
-            <p className="text-slate-500 text-xs font-medium mb-2">
-              Contas demo:
+          {/* Link para agendar */}
+          <div className="mt-6 pt-6 border-t border-slate-800 text-center">
+            <p className="text-slate-500 text-sm mb-3">
+              Quer agendar um horário?
             </p>
-            <p className="text-slate-400 text-xs">
-              Admin: paulo.lavarini@barbearia.com / admin123
-            </p>
-            <p className="text-slate-400 text-xs">
-              Profissional: joao@barbearia.com / senha123
-            </p>
-            <p className="text-slate-400 text-xs">
-              Cliente: demo@horacerta.com / demo123
-            </p>
+            <a
+              href="/agendar"
+              className="inline-flex items-center gap-2 text-emerald-400 hover:text-emerald-300 text-sm font-medium transition"
+            >
+              <CalendarPlus className="w-4 h-4" />
+              Agendar online
+            </a>
           </div>
         </div>
 

@@ -93,3 +93,15 @@ export const createUser = (data: {
 
 export const toggleUserActive = (id: number) =>
   api.put<{ message: string }>(`/api/v1/users/${id}/toggle-active`);
+
+// Perfil
+export const changePassword = (data: {
+  current_password: string;
+  new_password: string;
+}) => api.put<{ message: string }>("/auth/change-password", data);
+
+export const updateProfile = (data: {
+  name?: string;
+  phone?: string;
+  email?: string;
+}) => api.put<User>("/auth/profile", data);

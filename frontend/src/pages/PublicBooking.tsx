@@ -183,19 +183,6 @@ export default function PublicBooking() {
     }
   };
 
-  const reset = () => {
-    setStep("info");
-    setSelectedProf(null);
-    setSelectedService(null);
-    setSelectedDate("");
-    setSelectedTime(null);
-    setClientName("");
-    setClientPhone("");
-    setClientEmail("");
-    setError("");
-    setBookingResult(null);
-  };
-
   const stepIndex = STEP_LIST.findIndex((s) => s.key === step);
 
   return (
@@ -210,6 +197,12 @@ export default function PublicBooking() {
             <h1 className="text-lg font-bold">{empresaName || "HoraCerta"}</h1>
             <p className="text-xs text-slate-500">Agendamento Online</p>
           </div>
+          <a
+            href="/login"
+            className="ml-auto text-slate-400 hover:text-emerald-400 text-sm font-medium transition flex items-center gap-1.5"
+          >
+            Já tem conta? <span className="text-emerald-400">Entrar</span>
+          </a>
         </div>
       </div>
 
@@ -646,23 +639,32 @@ export default function PublicBooking() {
               )}{" "}
               às {bookingResult.start_time.slice(0, 5)}
             </p>
-            <p className="text-slate-500 text-sm mb-8">
-              Você receberá um lembrete 24h antes por email e WhatsApp.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
-                onClick={reset}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6 py-3 rounded-xl transition"
-              >
-                Agendar Outro
-              </button>
-              <a
-                href="/login"
-                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-6 py-3 rounded-xl transition text-center"
-              >
-                Entrar na Conta
-              </a>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-6 max-w-md mx-auto">
+              <p className="text-slate-300 text-sm mb-2">
+                Enviamos sua senha de acesso para:
+              </p>
+              <p className="text-white text-sm font-medium">📧 {clientEmail}</p>
+              {clientPhone && (
+                <p className="text-white text-sm font-medium">
+                  📱 {clientPhone}
+                </p>
+              )}
+              <p className="text-slate-500 text-xs mt-3">
+                Use seu email e a senha recebida para acompanhar e gerenciar
+                seus agendamentos.
+              </p>
             </div>
+            <button
+              onClick={() => {
+                // Limpa sessão anterior (se existir) antes de ir pro login
+                localStorage.removeItem("horacerta_token");
+                localStorage.removeItem("horacerta_user");
+                window.location.href = "/login";
+              }}
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-8 py-3.5 rounded-xl transition"
+            >
+              <User className="w-4 h-4" /> Entrar na Minha Conta
+            </button>
           </div>
         )}
       </div>

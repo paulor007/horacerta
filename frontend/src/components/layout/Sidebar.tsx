@@ -7,6 +7,7 @@ import {
   Users,
   LogOut,
   ListChecks,
+  Settings,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -17,13 +18,12 @@ interface SidebarProps {
 export default function Sidebar({ active, onNavigate }: SidebarProps) {
   const { user, logout } = useAuth();
 
-  // Links por role
   const links: { id: string; icon: React.ElementType; label: string }[] = [];
 
   if (user?.role === "client") {
     links.push(
-      { id: "book", icon: CalendarPlus, label: "Agendar" },
       { id: "my-appointments", icon: ListChecks, label: "Meus Agendamentos" },
+      { id: "book", icon: CalendarPlus, label: "Novo Agendamento" },
     );
   }
 
@@ -38,6 +38,11 @@ export default function Sidebar({ active, onNavigate }: SidebarProps) {
       { id: "admin", icon: Users, label: "Admin" },
     );
   }
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = "/agendar";
+  };
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 min-h-screen flex flex-col">
@@ -76,21 +81,29 @@ export default function Sidebar({ active, onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      {/* User info + logout */}
+      {/* User info — clicável → settings */}
       <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center gap-3 mb-3 px-2">
+        <button
+          onClick={() => onNavigate("settings")}
+          className={`w-full flex items-center gap-3 mb-3 px-2 py-2 rounded-xl transition ${
+            active === "settings"
+              ? "bg-emerald-600/15 border border-emerald-500/20"
+              : "hover:bg-slate-800"
+          }`}
+        >
           <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-white text-sm font-bold">
             {user?.name?.charAt(0) || "U"}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 text-left">
             <p className="text-sm text-white font-medium truncate">
               {user?.name}
             </p>
             <p className="text-xs text-slate-500 capitalize">{user?.role}</p>
           </div>
-        </div>
+          <Settings className="w-4 h-4 text-slate-500" />
+        </button>
         <button
-          onClick={logout}
+          onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition"
         >
           <LogOut className="w-4 h-4" />

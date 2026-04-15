@@ -5,12 +5,18 @@ interface AuthUser {
   name: string;
   role: string;
   email: string;
+  phone?: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  refreshUser: (data: {
+    name: string;
+    email: string;
+    phone?: string | null;
+  }) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -41,8 +47,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const refreshUser = (data: {
+    name: string;
+    email: string;
+    phone?: string | null;
+  }) => {
+    if (!user) return;
+    const updated = {
+      ...user,
+      name: data.name,
+      email: data.email,
+      phone: data.phone || undefined,
+    };
+    setUser(updated);
+    localStorage.setItem("horacerta_user", JSON.stringify(updated));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

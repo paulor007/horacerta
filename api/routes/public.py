@@ -1,17 +1,15 @@
 """
 Endpoints públicos — agendamento sem login.
 
-Link compartilhável: o dono da barbearia envia o link para clientes.
-O cliente agenda informando apenas nome, telefone e email.
-Não precisa de conta nem JWT.
-
 Segurança:
 - Rate limit geral: 60 req/min por IP
 - Rate limit booking: 5 agendamentos/hora por IP
+- Senha aleatória enviada por email/WhatsApp para novos clientes
 """
 
 import logging
 import secrets
+import string
 from datetime import datetime, timedelta
 from datetime import date as date_type
 from datetime import time as time_type
@@ -36,6 +34,14 @@ from services.rate_limit import check_rate_limit, check_booking_rate_limit
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/public", tags=["Agendamento Público"])
+
+
+def _generate_password(length: int = 8) -> str:
+    """Gera senha legível: letras + números, sem caracteres ambíguos."""
+    chars = string.ascii_letters + string.digits
+    # Remove caracteres confusos: 0, O, l, 1, I
+    chars = chars.replace("0", "").replace("O", "").replace("l", "").replace("1", "").replace("I", "")
+    return "hc-" + "".join(secrets.choice(chars) for _ in range(length))
 
 
 # ── Schemas ──
@@ -73,6 +79,7 @@ class PublicBookingResponse(BaseModel):
     start_time: time_type
     end_time: time_type
     message: str
+    is_new_user: bool = False
 
 
 class PublicInfoResponse(BaseModel):
@@ -81,28 +88,18 @@ class PublicInfoResponse(BaseModel):
     services_count: int
 
 
-# ── Endpoints (todos com rate limit) ──
+# ── Endpoints ──
 
 @router.get("/info", response_model=PublicInfoResponse)
-def public_info(
-    request: Request,
-    db: Session = Depends(get_db),
-):
+def public_info(request: Request, db: Session = Depends(get_db)):
     check_rate_limit(request)
     profs = db.query(Professional).filter(Professional.is_active.is_(True)).count()
     svcs = db.query(Service).filter(Service.is_active.is_(True)).count()
-    return PublicInfoResponse(
-        name=settings.EMPRESA_NOME,
-        professionals_count=profs,
-        services_count=svcs,
-    )
+    return PublicInfoResponse(name=settings.EMPRESA_NOME, professionals_count=profs, services_count=svcs)
 
 
 @router.get("/professionals", response_model=list[ProfessionalResponse])
-def public_professionals(
-    request: Request,
-    db: Session = Depends(get_db),
-):
+def public_professionals(request: Request, db: Session = Depends(get_db)):
     check_rate_limit(request)
     profs = (
         db.query(Professional)
@@ -119,10 +116,7 @@ def public_professionals(
 
 
 @router.get("/services", response_model=list[ServiceResponse])
-def public_services(
-    request: Request,
-    db: Session = Depends(get_db),
-):
+def public_services(request: Request, db: Session = Depends(get_db)):
     check_rate_limit(request)
     return db.query(Service).filter(Service.is_active.is_(True)).all()
 
@@ -136,7 +130,6 @@ def public_availability(
     db: Session = Depends(get_db),
 ):
     check_rate_limit(request)
-
     try:
         target_date = date_type.fromisoformat(date)
     except ValueError:
@@ -152,7 +145,6 @@ def public_availability(
         raise HTTPException(status_code=404, detail="Profissional não encontrado")
 
     raw_slots = get_available_slots(db, professional_id, target_date, service_id)
-
     slots = []
     for s in raw_slots:
         h, m = map(int, s["time"].split(":"))
@@ -167,29 +159,29 @@ def public_availability(
 
 
 @router.post("/book", response_model=PublicBookingResponse, status_code=201)
-def public_book(
-    data: PublicBookingRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    # Rate limits: geral + booking específico
+def public_book(data: PublicBookingRequest, request: Request, db: Session = Depends(get_db)):
     check_rate_limit(request)
     check_booking_rate_limit(request)
 
     # Buscar ou criar cliente
     user = db.query(User).filter(User.email == data.client_email).first()
+    is_new_user = False
+    plain_password = None
 
     if not user:
+        # Gerar senha legível para o novo cliente
+        plain_password = _generate_password()
         user = User(
             name=data.client_name,
             email=data.client_email,
             phone=data.client_phone,
-            hashed_password=hash_password(secrets.token_urlsafe(16)),
+            hashed_password=hash_password(plain_password),
             role="client",
         )
         db.add(user)
         db.flush()
-        logger.info("Novo cliente via booking público: %s", data.client_email)
+        is_new_user = True
+        logger.info("Novo cliente via booking público: %s (senha enviada)", data.client_email)
     else:
         user.name = data.client_name
         user.phone = data.client_phone
@@ -210,16 +202,14 @@ def public_book(
     if not service:
         raise HTTPException(status_code=404, detail="Serviço não encontrado ou inativo")
 
-    # Verificar dia da semana
+    # Verificações
     weekday = data.date.isoweekday()
     if str(weekday) not in prof.work_days.split(","):
         raise HTTPException(status_code=400, detail="Profissional não trabalha neste dia")
 
-    # Verificar horário comercial
     if data.start_time < prof.work_start or data.start_time >= prof.work_end:
         raise HTTPException(status_code=400, detail="Horário fora do expediente")
 
-    # Calcular end_time
     start_dt = datetime.combine(data.date, data.start_time)
     end_dt = start_dt + timedelta(minutes=service.duration_min)
     end_time = end_dt.time()
@@ -227,12 +217,10 @@ def public_book(
     if end_time > prof.work_end:
         raise HTTPException(status_code=400, detail="Serviço ultrapassa horário de trabalho")
 
-    # Verificar passado
     now = datetime.now()
     if data.date < now.date() or (data.date == now.date() and data.start_time <= now.time()):
         raise HTTPException(status_code=400, detail="Não é possível agendar no passado")
 
-    # Verificar conflito
     if check_conflict(db, data.professional_id, data.date, data.start_time, end_time):
         raise HTTPException(status_code=409, detail="Horário já ocupado")
 
@@ -250,16 +238,14 @@ def public_book(
     db.commit()
     db.refresh(appointment)
 
+    # Notificação com senha (se novo usuário)
     try:
         from tasks.reminders import notify_new_appointment
-        notify_new_appointment.delay(appointment.id)
+        notify_new_appointment.delay(appointment.id, plain_password)
     except Exception:
         logger.debug("Celery indisponível — notificação ignorada")
 
     prof_name = prof.user.name if prof.user else f"Prof #{prof.id}"
-
-    logger.info("Booking público: %s agendou %s com %s em %s %s",
-                data.client_name, service.name, prof_name, data.date, data.start_time)
 
     return PublicBookingResponse(
         id=appointment.id,
@@ -269,5 +255,6 @@ def public_book(
         date=data.date,
         start_time=data.start_time,
         end_time=end_time,
-        message="Agendamento confirmado! Você receberá um lembrete por email e WhatsApp.",
+        message="Agendamento confirmado! Enviamos sua senha de acesso por email e WhatsApp.",
+        is_new_user=is_new_user,
     )
