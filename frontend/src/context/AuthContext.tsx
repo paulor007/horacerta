@@ -8,8 +8,12 @@ import {
 } from "react";
 import { api } from "../api/client";
 
-// Tempo de inatividade para auto-logout (15 minutos)
 const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+
+const STORAGE_KEY_TOKEN = "horacerta_token";
+const STORAGE_KEY_USER = "horacerta_user";
+const STORAGE_KEY_ACTIVITY = "horacerta_last_activity";
+const STORAGE_KEY_REMEMBER = "horacerta_remember";
 
 interface AuthUser {
   name: string;
@@ -20,7 +24,11 @@ interface AuthUser {
 
 interface AuthContextType {
   user: AuthUser | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (
+    email: string,
+    password: string,
+    remember?: boolean,
+  ) => Promise<boolean>;
   logout: () => void;
   refreshUser: (data: {
     name: string;
@@ -31,37 +39,44 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+function getStorage(): Storage {
+  return localStorage.getItem(STORAGE_KEY_REMEMBER) === "true"
+    ? localStorage
+    : sessionStorage;
+}
+
 function getInitialUser(): AuthUser | null {
-  const saved = localStorage.getItem("horacerta_user");
-  const token = localStorage.getItem("horacerta_token");
+  // Verifica em sessionStorage e localStorage
+  const storage = getStorage();
+  const saved =
+    storage.getItem(STORAGE_KEY_USER) ||
+    sessionStorage.getItem(STORAGE_KEY_USER);
+  const token =
+    storage.getItem(STORAGE_KEY_TOKEN) ||
+    sessionStorage.getItem(STORAGE_KEY_TOKEN);
 
   if (!saved || !token) return null;
 
-  // Verificar se token JWT expirou (decodifica payload)
+  // Verificar JWT expirado
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
     if (payload.exp && payload.exp * 1000 < Date.now()) {
-      // Token expirado — limpar sessão
-      localStorage.removeItem("horacerta_token");
-      localStorage.removeItem("horacerta_user");
-      localStorage.removeItem("horacerta_last_activity");
+      api.clearToken();
       return null;
     }
   } catch {
-    // Token malformado
-    localStorage.removeItem("horacerta_token");
-    localStorage.removeItem("horacerta_user");
+    api.clearToken();
     return null;
   }
 
   // Verificar inatividade
-  const lastActivity = localStorage.getItem("horacerta_last_activity");
+  const lastActivity =
+    storage.getItem(STORAGE_KEY_ACTIVITY) ||
+    sessionStorage.getItem(STORAGE_KEY_ACTIVITY);
   if (lastActivity) {
     const elapsed = Date.now() - parseInt(lastActivity);
     if (elapsed > SESSION_TIMEOUT_MS) {
-      localStorage.removeItem("horacerta_token");
-      localStorage.removeItem("horacerta_user");
-      localStorage.removeItem("horacerta_last_activity");
+      api.clearToken();
       return null;
     }
   }
@@ -74,19 +89,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     api.clearToken();
-    localStorage.removeItem("horacerta_last_activity");
     setUser(null);
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (
+    email: string,
+    password: string,
+    remember: boolean = false,
+  ): Promise<boolean> => {
     const data = await api.loginRequest(email, password);
     if (!data) return false;
 
-    api.setToken(data.access_token);
+    api.setToken(data.access_token, remember);
+
+    const storage = remember ? localStorage : sessionStorage;
     const authUser: AuthUser = { name: data.name, role: data.role, email };
     setUser(authUser);
-    localStorage.setItem("horacerta_user", JSON.stringify(authUser));
-    localStorage.setItem("horacerta_last_activity", String(Date.now()));
+    storage.setItem(STORAGE_KEY_USER, JSON.stringify(authUser));
+    storage.setItem(STORAGE_KEY_ACTIVITY, String(Date.now()));
     return true;
   };
 
@@ -103,25 +123,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       phone: data.phone || undefined,
     };
     setUser(updated);
-    localStorage.setItem("horacerta_user", JSON.stringify(updated));
+    const storage = getStorage();
+    storage.setItem(STORAGE_KEY_USER, JSON.stringify(updated));
   };
 
-  // Tracker de atividade — atualiza timestamp a cada interação
+  // Activity tracker + inactivity check
   useEffect(() => {
     if (!user) return;
 
+    const storage = getStorage();
+
     const updateActivity = () => {
-      localStorage.setItem("horacerta_last_activity", String(Date.now()));
+      storage.setItem(STORAGE_KEY_ACTIVITY, String(Date.now()));
     };
 
-    // Registra atividade em cliques, teclas e scroll
     window.addEventListener("click", updateActivity);
     window.addEventListener("keydown", updateActivity);
-    window.addEventListener("scroll", updateActivity);
 
-    // Verifica inatividade a cada minuto
     const interval = setInterval(() => {
-      const lastActivity = localStorage.getItem("horacerta_last_activity");
+      const lastActivity = storage.getItem(STORAGE_KEY_ACTIVITY);
       if (lastActivity) {
         const elapsed = Date.now() - parseInt(lastActivity);
         if (elapsed > SESSION_TIMEOUT_MS) {
@@ -134,7 +154,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener("click", updateActivity);
       window.removeEventListener("keydown", updateActivity);
-      window.removeEventListener("scroll", updateActivity);
       clearInterval(interval);
     };
   }, [user, logout]);

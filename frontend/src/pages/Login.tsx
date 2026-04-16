@@ -6,6 +6,7 @@ import { Clock, LogIn, CalendarPlus } from "lucide-react";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -16,7 +17,7 @@ export default function Login() {
     setError("");
     setLoading(true);
 
-    const ok = await login(email, password);
+    const ok = await login(email, password, remember);
     setLoading(false);
 
     if (ok) {
@@ -29,7 +30,6 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-600/20 mb-4">
             <Clock className="w-8 h-8 text-emerald-500" />
@@ -38,7 +38,6 @@ export default function Login() {
           <p className="text-slate-400 mt-2">Acesse sua conta</p>
         </div>
 
-        {/* Form */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -68,6 +67,17 @@ export default function Login() {
               />
             </div>
 
+            {/* Lembrar de mim */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+              />
+              <span className="text-slate-400 text-sm">Lembrar de mim</span>
+            </label>
+
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-red-400 text-sm">
                 {error}
@@ -90,7 +100,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Link para agendar */}
           <div className="mt-6 pt-6 border-t border-slate-800 text-center">
             <p className="text-slate-500 text-sm mb-3">
               Quer agendar um horário?

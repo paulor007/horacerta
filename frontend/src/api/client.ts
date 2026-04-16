@@ -1,20 +1,40 @@
+const STORAGE_KEY_TOKEN = "horacerta_token";
+const STORAGE_KEY_USER = "horacerta_user";
+const STORAGE_KEY_ACTIVITY = "horacerta_last_activity";
+const STORAGE_KEY_REMEMBER = "horacerta_remember";
+
 class ApiClient {
   private token: string | null = null;
 
   constructor() {
-    this.token = localStorage.getItem("horacerta_token");
+    // Tenta sessionStorage primeiro, depois localStorage (lembrar de mim)
+    this.token =
+      sessionStorage.getItem(STORAGE_KEY_TOKEN) ||
+      localStorage.getItem(STORAGE_KEY_TOKEN);
   }
 
-  setToken(token: string) {
+  setToken(token: string, remember: boolean = false) {
     this.token = token;
-    localStorage.setItem("horacerta_token", token);
+
+    if (remember) {
+      localStorage.setItem(STORAGE_KEY_REMEMBER, "true");
+      localStorage.setItem(STORAGE_KEY_TOKEN, token);
+    } else {
+      localStorage.removeItem(STORAGE_KEY_REMEMBER);
+      localStorage.removeItem(STORAGE_KEY_TOKEN);
+      sessionStorage.setItem(STORAGE_KEY_TOKEN, token);
+    }
   }
 
   clearToken() {
     this.token = null;
-    localStorage.removeItem("horacerta_token");
-    localStorage.removeItem("horacerta_user");
-    localStorage.removeItem("horacerta_last_activity");
+    sessionStorage.removeItem(STORAGE_KEY_TOKEN);
+    sessionStorage.removeItem(STORAGE_KEY_USER);
+    sessionStorage.removeItem(STORAGE_KEY_ACTIVITY);
+    localStorage.removeItem(STORAGE_KEY_TOKEN);
+    localStorage.removeItem(STORAGE_KEY_USER);
+    localStorage.removeItem(STORAGE_KEY_ACTIVITY);
+    localStorage.removeItem(STORAGE_KEY_REMEMBER);
   }
 
   private headers(): HeadersInit {
@@ -26,7 +46,6 @@ class ApiClient {
   }
 
   private handleUnauthorized(res: Response): void {
-    // Se o backend retornar 401, força logout (token expirou ou inválido)
     if (res.status === 401 && this.token) {
       this.clearToken();
       window.location.href = "/login";
