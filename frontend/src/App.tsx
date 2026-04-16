@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
 import PublicBooking from "./pages/PublicBooking";
+import PublicReview from "./pages/PublicReview";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -53,6 +54,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/agendar" element={<PublicBooking />} />
+          <Route path="/avaliar" element={<PublicReview />} />
           <Route path="/login" element={<LoginGuard />} />
           <Route
             path="/painel"

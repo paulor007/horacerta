@@ -372,6 +372,30 @@ def complete_appointment(
     db.commit()
     db.refresh(apt)
 
+    # Criar token de avaliação para o cliente
+    try:
+        from models.review import Review
+        from api.routes.reviews import generate_review_token
+        existing_review = db.query(Review).filter(Review.appointment_id == appointment_id).first()
+        if not existing_review:
+            review = Review(
+                appointment_id=appointment_id,
+                client_id=apt.client_id,
+                professional_id=apt.professional_id,
+                rating=0,
+                token=generate_review_token(),
+            )
+            db.add(review)
+            db.commit()
+
+            try:
+                from tasks.reminders import notify_review_request
+                notify_review_request.delay(appointment_id, review.token)
+            except Exception:
+                logger.debug("Celery indisponível — review request ignorado")
+    except Exception:
+        logger.debug("Review creation failed — continuing")
+
     _broadcast_safe(ws_manager.broadcast_appointment_event(
         "completed", apt.professional_id, {"id": appointment_id},
     ))

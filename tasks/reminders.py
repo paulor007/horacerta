@@ -15,6 +15,7 @@ from models.notification import Notification
 from models.professional import Professional
 from models.user import User
 from services.notification import (
+    build_review_request_message,
     send_email,
     send_whatsapp,
     register_notification,
@@ -193,6 +194,52 @@ def notify_new_appointment(appointment_id: int, client_password: str | None = No
 
     except Exception as e:
         print(f"  [NOTIFY] Erro: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="tasks.reminders.notify_review_request")
+def notify_review_request(appointment_id: int, review_token: str):
+    """Envia pedido de avaliação ao cliente após atendimento concluído."""
+    db = SessionLocal()
+    try:
+        apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+        if not apt:
+            return {"error": "Appointment not found"}
+
+        client = db.query(User).filter(User.id == apt.client_id).first()
+        prof = db.query(Professional).filter(Professional.id == apt.professional_id).first()
+        prof_user = db.query(User).filter(User.id == prof.user_id).first() if prof else None
+
+        if not client or not prof_user:
+            return {"error": "Missing user data"}
+
+        service_name = apt.service.name if apt.service else "Serviço"
+        date_str = apt.date.strftime("%d/%m/%Y")
+
+        # URL de avaliação (frontend)
+        review_url = f"http://localhost:5173/avaliar?token={review_token}"
+
+        messages = build_review_request_message(
+            client_name=client.name,
+            professional_name=prof_user.name,
+            service_name=service_name,
+            date_str=date_str,
+            review_url=review_url,
+        )
+
+        email_ok = send_email(client.email, "Como foi seu atendimento? — HoraCerta", messages["email"])
+        register_notification(apt.id, "review_request", "email", email_ok)
+
+        if client.phone:
+            wp_ok = send_whatsapp(client.phone, messages["whatsapp"])
+            register_notification(apt.id, "review_request", "whatsapp", wp_ok)
+
+        return {"review_sent": True}
+
+    except Exception as e:
+        print(f"  [REVIEW] Erro: {e}")
         return {"error": str(e)}
     finally:
         db.close()

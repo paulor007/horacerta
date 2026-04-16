@@ -14,6 +14,7 @@ class ApiClient {
     this.token = null;
     localStorage.removeItem("horacerta_token");
     localStorage.removeItem("horacerta_user");
+    localStorage.removeItem("horacerta_last_activity");
   }
 
   private headers(): HeadersInit {
@@ -24,10 +25,18 @@ class ApiClient {
     return h;
   }
 
+  private handleUnauthorized(res: Response): void {
+    // Se o backend retornar 401, força logout (token expirou ou inválido)
+    if (res.status === 401 && this.token) {
+      this.clearToken();
+      window.location.href = "/login";
+    }
+  }
+
   async get<T>(endpoint: string): Promise<T | null> {
     try {
       const res = await fetch(endpoint, { headers: this.headers() });
-      if (res.status === 401) return null;
+      this.handleUnauthorized(res);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -42,6 +51,7 @@ class ApiClient {
         headers: this.headers(),
         body: body ? JSON.stringify(body) : undefined,
       });
+      this.handleUnauthorized(res);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -56,6 +66,7 @@ class ApiClient {
         headers: this.headers(),
         body: body ? JSON.stringify(body) : undefined,
       });
+      this.handleUnauthorized(res);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -69,6 +80,7 @@ class ApiClient {
         method: "DELETE",
         headers: this.headers(),
       });
+      this.handleUnauthorized(res);
       if (!res.ok) return null;
       return await res.json();
     } catch {

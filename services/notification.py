@@ -216,3 +216,38 @@ def build_professional_notification(professional_name: str, client_name: str,
     )
 
     return {"email": email_body, "whatsapp": whatsapp_msg}
+
+
+def build_review_request_message(client_name: str, professional_name: str,
+                                  service_name: str, date_str: str,
+                                  review_url: str) -> dict:
+    """Monta mensagem pedindo avaliação após atendimento."""
+    email_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
+        <h2 style="color: #f59e0b;">⭐ Como foi seu atendimento? — {settings.EMPRESA_NOME}</h2>
+        <p>Olá <strong>{client_name}</strong>,</p>
+        <p>Seu atendimento com <strong>{professional_name}</strong> foi concluído!</p>
+        <div style="background: #fffbeb; border-radius: 12px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;">📋 <strong>Serviço:</strong> {service_name}</p>
+            <p style="margin: 4px 0;">📅 <strong>Data:</strong> {date_str}</p>
+        </div>
+        <p>Sua opinião é muito importante para nós! Avalie o atendimento:</p>
+        <div style="text-align: center; margin: 20px 0;">
+            <a href="{review_url}" style="background: #f59e0b; color: white; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: bold; display: inline-block;">
+                ⭐ Avaliar Atendimento
+            </a>
+        </div>
+        <p style="color: #94a3b8; font-size: 12px;">{settings.EMPRESA_NOME} — HoraCerta</p>
+    </div>
+    """
+
+    whatsapp_msg = (
+        f"⭐ *Como foi seu atendimento?*\n\n"
+        f"Olá {client_name}!\n\n"
+        f"Seu atendimento com *{professional_name}* ({service_name}) foi concluído.\n\n"
+        f"Avalie de 1 a 5 estrelas:\n"
+        f"{review_url}\n\n"
+        f"_{settings.EMPRESA_NOME} — HoraCerta_"
+    )
+
+    return {"email": email_body, "whatsapp": whatsapp_msg}

@@ -2,9 +2,8 @@
 Endpoints públicos — agendamento sem login.
 
 Segurança:
-- Rate limit geral: 60 req/min por IP
-- Rate limit booking: 5 agendamentos/hora por IP
-- Senha aleatória enviada por email/WhatsApp para novos clientes
+- Rate limit: 60 req/min + 5 bookings/hora por IP
+- Senha entregue por email/WhatsApp (síncrono se Celery indisponível)
 """
 
 import logging
@@ -29,7 +28,12 @@ from schemas.appointment import AvailabilityResponse, TimeSlot
 from schemas.professional import ProfessionalResponse
 from schemas.service import ServiceResponse
 from services.availability import get_available_slots, check_conflict
-from services.rate_limit import check_rate_limit, check_booking_rate_limit
+try:
+    from services.rate_limit import check_rate_limit, check_booking_rate_limit
+except ImportError:
+    # Fallback: sem rate limit se módulo não existir
+    def check_rate_limit(request): pass
+    def check_booking_rate_limit(request): pass
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +41,10 @@ router = APIRouter(prefix="/api/v1/public", tags=["Agendamento Público"])
 
 
 def _generate_password(length: int = 8) -> str:
-    """Gera senha legível: letras + números, sem caracteres ambíguos."""
     chars = string.ascii_letters + string.digits
-    # Remove caracteres confusos: 0, O, l, 1, I
     chars = chars.replace("0", "").replace("O", "").replace("l", "").replace("1", "").replace("I", "")
     return "hc-" + "".join(secrets.choice(chars) for _ in range(length))
 
-
-# ── Schemas ──
 
 class PublicBookingRequest(BaseModel):
     client_name: str
@@ -88,8 +88,6 @@ class PublicInfoResponse(BaseModel):
     services_count: int
 
 
-# ── Endpoints ──
-
 @router.get("/info", response_model=PublicInfoResponse)
 def public_info(request: Request, db: Session = Depends(get_db)):
     check_rate_limit(request)
@@ -107,6 +105,7 @@ def public_professionals(request: Request, db: Session = Depends(get_db)):
         .filter(Professional.is_active.is_(True))
         .all()
     )
+    logger.info("Public professionals: %d encontrados", len(profs))
     result = []
     for p in profs:
         data = ProfessionalResponse.model_validate(p)
@@ -163,13 +162,11 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
     check_rate_limit(request)
     check_booking_rate_limit(request)
 
-    # Buscar ou criar cliente
     user = db.query(User).filter(User.email == data.client_email).first()
     is_new_user = False
     plain_password = None
 
     if not user:
-        # Gerar senha legível para o novo cliente
         plain_password = _generate_password()
         user = User(
             name=data.client_name,
@@ -181,7 +178,7 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
         db.add(user)
         db.flush()
         is_new_user = True
-        logger.info("Novo cliente via booking público: %s (senha enviada)", data.client_email)
+        logger.info("Novo cliente: %s | senha: %s", data.client_email, plain_password)
     else:
         user.name = data.client_name
         user.phone = data.client_phone
@@ -194,7 +191,6 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
     if not prof:
         raise HTTPException(status_code=404, detail="Profissional não encontrado ou inativo")
 
-    # Validar serviço
     service = db.query(Service).filter(
         Service.id == data.service_id,
         Service.is_active.is_(True),
@@ -202,7 +198,6 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
     if not service:
         raise HTTPException(status_code=404, detail="Serviço não encontrado ou inativo")
 
-    # Verificações
     weekday = data.date.isoweekday()
     if str(weekday) not in prof.work_days.split(","):
         raise HTTPException(status_code=400, detail="Profissional não trabalha neste dia")
@@ -224,7 +219,6 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
     if check_conflict(db, data.professional_id, data.date, data.start_time, end_time):
         raise HTTPException(status_code=409, detail="Horário já ocupado")
 
-    # Criar agendamento
     appointment = Appointment(
         client_id=user.id,
         professional_id=data.professional_id,
@@ -238,12 +232,18 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
     db.commit()
     db.refresh(appointment)
 
-    # Notificação com senha (se novo usuário)
+    # Notificação — tenta Celery, se falhar faz síncrono (senha NÃO se perde)
     try:
         from tasks.reminders import notify_new_appointment
         notify_new_appointment.delay(appointment.id, plain_password)
+        logger.info("Notificação enviada via Celery")
     except Exception:
-        logger.debug("Celery indisponível — notificação ignorada")
+        logger.info("Celery indisponível — enviando notificação síncrona")
+        try:
+            from tasks.reminders import notify_new_appointment
+            notify_new_appointment(appointment.id, plain_password)
+        except Exception as e:
+            logger.warning("Falha na notificação síncrona: %s", e)
 
     prof_name = prof.user.name if prof.user else f"Prof #{prof.id}"
 

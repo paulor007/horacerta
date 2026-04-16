@@ -56,9 +56,13 @@ async function apiFetch<T>(
 ): Promise<T | null> {
   try {
     const res = await fetch(url, options);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[API] ${url} → ${res.status}`);
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    console.error(`[API] ${url} erro:`, err);
     return null;
   }
 }
@@ -92,14 +96,16 @@ export default function PublicBooking() {
     end_time: string;
   } | null>(null);
 
-  // Carregar tudo na montagem — sem depender de step
+  // Carregar tudo na montagem
   useEffect(() => {
     apiFetch<{ name: string }>("/api/v1/public/info").then((data) => {
       if (data) setEmpresaName(data.name);
     });
+
     apiFetch<Professional[]>("/api/v1/public/professionals").then((data) => {
       setProfessionals(data || []);
     });
+
     apiFetch<Service[]>("/api/v1/public/services").then((data) => {
       setServices(data || []);
     });
