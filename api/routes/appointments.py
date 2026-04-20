@@ -233,6 +233,13 @@ def cancel_appointment(
     apt.status = "cancelled"
     db.commit()
 
+    # Notificar lista de espera que vaga abriu
+    try:
+        from api.routes.waitlist_routes import notify_waitlist_on_cancel
+        notify_waitlist_on_cancel(db, apt.professional_id, apt.date)
+    except Exception:
+        logger.debug("Waitlist notification failed — continuing")
+
     _broadcast_safe(ws_manager.broadcast_appointment_event(
         "cancelled", apt.professional_id, {"id": appointment_id},
     ))
@@ -372,29 +379,36 @@ def complete_appointment(
     db.commit()
     db.refresh(apt)
 
-    # Criar token de avaliação para o cliente
+    # Criar token de avaliação (em sessão separada para não afetar o complete)
     try:
         from models.review import Review
-        from api.routes.reviews import generate_review_token
-        existing_review = db.query(Review).filter(Review.appointment_id == appointment_id).first()
-        if not existing_review:
-            review = Review(
-                appointment_id=appointment_id,
-                client_id=apt.client_id,
-                professional_id=apt.professional_id,
-                rating=0,
-                token=generate_review_token(),
-            )
-            db.add(review)
-            db.commit()
+        from core.database import SessionLocal
+        import secrets
 
-            try:
-                from tasks.reminders import notify_review_request
-                notify_review_request.delay(appointment_id, review.token)
-            except Exception:
-                logger.debug("Celery indisponível — review request ignorado")
-    except Exception:
-        logger.debug("Review creation failed — continuing")
+        review_db = SessionLocal()
+        try:
+            existing_review = review_db.query(Review).filter(Review.appointment_id == appointment_id).first()
+            if not existing_review:
+                review_token = secrets.token_urlsafe(32)
+                review = Review(
+                    appointment_id=appointment_id,
+                    client_id=apt.client_id,
+                    professional_id=apt.professional_id,
+                    rating=0,
+                    token=review_token,
+                )
+                review_db.add(review)
+                review_db.commit()
+                print("")
+                print("  ⭐ REVIEW TOKEN: http://localhost:5173/avaliar?token={review_token}")
+                print("")
+        except Exception as e:
+            review_db.rollback()
+            logger.warning("Review creation failed: %s", e)
+        finally:
+            review_db.close()
+    except ImportError:
+        logger.debug("Review model not available — skipping")
 
     _broadcast_safe(ws_manager.broadcast_appointment_event(
         "completed", apt.professional_id, {"id": appointment_id},

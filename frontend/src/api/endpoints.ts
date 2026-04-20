@@ -105,3 +105,42 @@ export const updateProfile = (data: {
   phone?: string;
   email?: string;
 }) => api.put<User>("/auth/profile", data);
+
+// Lista de espera
+export const joinWaitlistPublic = (data: {
+  client_name: string;
+  client_email: string;
+  client_phone: string;
+  professional_id: number;
+  service_id: number;
+  date: string;
+}) =>
+  fetch("/api/v1/waitlist/public/join", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).then((r) => (r.ok ? r.json() : null));
+
+export const joinWaitlist = (data: {
+  professional_id: number;
+  service_id: number;
+  date: string;
+}) =>
+  api.post<{ message: string; position: number }>(
+    "/api/v1/waitlist/join",
+    data,
+  );
+
+export const getMyWaitlist = () =>
+  api.get<
+    {
+      id: number;
+      professional_name: string;
+      service_name: string;
+      date: string;
+      notified: boolean;
+    }[]
+  >("/api/v1/waitlist/my");
+
+export const leaveWaitlist = (id: number) =>
+  api.del<{ message: string }>(`/api/v1/waitlist/${id}`);

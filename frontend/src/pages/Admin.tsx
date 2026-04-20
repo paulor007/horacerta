@@ -79,7 +79,9 @@ export default function Admin() {
       });
       setShowForm(false);
     } else {
-      alert("Erro ao criar usuário. Email pode já existir.");
+      alert(
+        "Email já cadastrado no sistema (pode ter sido criado pelo agendamento público).",
+      );
     }
   };
 
@@ -132,7 +134,7 @@ export default function Admin() {
       });
       setShowForm(false);
     } else {
-      alert("Erro ao criar profissional.");
+      alert("Erro ao criar profissional. Usuário pode já ser profissional.");
     }
   };
 

@@ -178,7 +178,15 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
         db.add(user)
         db.flush()
         is_new_user = True
-        logger.info("Novo cliente: %s | senha: %s", data.client_email, plain_password)
+        # Senha visível no terminal para testes (remover em produção)
+        print("")
+        print("  ╔══════════════════════════════════════════════════╗")
+        print("  ║  NOVA CONTA CRIADA                               ║")
+        print("  ║  Email: {data.client_email:<40}                  ║")
+        print("  ║  Senha: {plain_password:<40}                     ║")
+        print("  ╚══════════════════════════════════════════════════╝")
+        print("")
+        logger.info("Novo cliente: %s", data.client_email)
     else:
         user.name = data.client_name
         user.phone = data.client_phone

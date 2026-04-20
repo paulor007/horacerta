@@ -11,6 +11,7 @@ from api.routes.appointments import router as appointments_router
 from api.routes.reports import router as reports_router
 from api.routes.public import router as public_router
 from api.routes.reviews import router as reviews_router
+from api.routes.waitlist_routes import router as waitlist_router
 from websocket.routes import router as ws_router
 
 app = FastAPI(
@@ -36,6 +37,7 @@ app.include_router(appointments_router)
 app.include_router(reports_router)
 app.include_router(public_router)
 app.include_router(reviews_router)
+app.include_router(waitlist_router)
 app.include_router(ws_router)
 
 

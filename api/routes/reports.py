@@ -141,3 +141,33 @@ def occupancy_by_day(
         })
 
     return result
+
+@router.delete("/cleanup")
+def cleanup_old_appointments(
+    days: int = Query(90, ge=7, le=365, description="Apagar registros mais antigos que X dias"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("admin")),
+):
+    """
+    Limpa agendamentos antigos (concluídos, cancelados, no-show).
+    Mantém os 'scheduled' e 'confirmed' intactos.
+    Padrão: apaga registros com mais de 90 dias.
+    """
+    from datetime import timedelta
+    cutoff = date.today() - timedelta(days=days)
+ 
+    deleted = (
+        db.query(Appointment)
+        .filter(
+            Appointment.date < cutoff,
+            Appointment.status.in_(["completed", "cancelled", "no_show"]),
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+ 
+    return {
+        "message": f"{deleted} agendamentos antigos removidos (antes de {cutoff.isoformat()})",
+        "deleted": deleted,
+        "cutoff_date": cutoff.isoformat(),
+    }

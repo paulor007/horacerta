@@ -77,6 +77,8 @@ export default function PublicBooking() {
   const [services, setServices] = useState<Service[]>([]);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [waitlistMsg, setWaitlistMsg] = useState("");
+  const [joiningWaitlist, setJoiningWaitlist] = useState(false);
   const [slotsKey, setSlotsKey] = useState(0);
 
   const [selectedProf, setSelectedProf] = useState<Professional | null>(null);
@@ -189,6 +191,19 @@ export default function PublicBooking() {
     }
   };
 
+  const reset = () => {
+    setStep("info");
+    setSelectedProf(null);
+    setSelectedService(null);
+    setSelectedDate("");
+    setSelectedTime(null);
+    setClientName("");
+    setClientPhone("");
+    setClientEmail("");
+    setError("");
+    setBookingResult(null);
+  };
+
   const stepIndex = STEP_LIST.findIndex((s) => s.key === step);
 
   return (
@@ -297,12 +312,28 @@ export default function PublicBooking() {
               {error && <p className="text-red-400 text-sm">{error}</p>}
               <button
                 onClick={() => {
-                  if (
-                    !clientName.trim() ||
-                    !clientPhone.trim() ||
-                    !clientEmail.trim()
-                  ) {
+                  const name = clientName.trim();
+                  const phone = clientPhone.trim();
+                  const email = clientEmail.trim();
+
+                  if (!name || !phone || !email) {
                     setError("Preencha todos os campos");
+                    return;
+                  }
+                  if (name.length < 3 || /^[0-9]+$/.test(name)) {
+                    setError("Informe um nome válido (mínimo 3 letras)");
+                    return;
+                  }
+                  if (!/^[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+                    setError("Informe um email válido");
+                    return;
+                  }
+                  if (
+                    !/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(
+                      phone.replace(/\s/g, ""),
+                    )
+                  ) {
+                    setError("Informe um telefone válido. Ex: (31) 99999-0000");
                     return;
                   }
                   setError("");
@@ -485,14 +516,64 @@ export default function PublicBooking() {
               <div className="flex items-center justify-center py-10">
                 <div className="w-6 h-6 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
               </div>
-            ) : slots.length === 0 ? (
+            ) : slots.length === 0 || slots.every((s) => !s.available) ? (
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
-                <p className="text-slate-400 text-sm">
-                  Nenhum horário disponível nesta data.
+                <p className="text-white font-medium mb-2">
+                  Horários esgotados nesta data
                 </p>
+                <p className="text-slate-400 text-sm mb-5">
+                  Todos os horários estão ocupados. Entre na lista de espera e
+                  te avisaremos se uma vaga abrir.
+                </p>
+                {waitlistMsg ? (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-emerald-400 text-sm mb-4">
+                    {waitlistMsg}
+                  </div>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      setJoiningWaitlist(true);
+                      try {
+                        const res = await fetch(
+                          "/api/v1/waitlist/public/join",
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              client_name: clientName,
+                              client_email: clientEmail,
+                              client_phone: clientPhone,
+                              professional_id: selectedProf?.id,
+                              service_id: selectedService?.id,
+                              date: selectedDate,
+                            }),
+                          },
+                        );
+                        const data = await res.json();
+                        setWaitlistMsg(
+                          data.message || "Você entrou na lista de espera!",
+                        );
+                      } catch {
+                        setWaitlistMsg(
+                          "Erro ao entrar na fila. Tente novamente.",
+                        );
+                      }
+                      setJoiningWaitlist(false);
+                    }}
+                    disabled={joiningWaitlist}
+                    className="bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-black font-semibold px-6 py-3 rounded-xl transition mb-4"
+                  >
+                    {joiningWaitlist
+                      ? "Entrando..."
+                      : "🔔 Entrar na Lista de Espera"}
+                  </button>
+                )}
                 <button
-                  onClick={() => setStep("date")}
-                  className="mt-4 text-emerald-400 text-sm hover:underline"
+                  onClick={() => {
+                    setStep("date");
+                    setWaitlistMsg("");
+                  }}
+                  className="block mx-auto mt-2 text-slate-400 text-sm hover:text-white transition"
                 >
                   Escolher outra data
                 </button>

@@ -80,6 +80,8 @@ export default function Agenda() {
       setAppointments((prev) =>
         prev.map((a) => (a.id === id ? { ...a, status: "completed" } : a)),
       );
+    } else {
+      alert("Erro ao marcar como concluído. Verifique o terminal do backend.");
     }
   };
 
@@ -90,6 +92,8 @@ export default function Agenda() {
       setAppointments((prev) =>
         prev.map((a) => (a.id === id ? { ...a, status: "no_show" } : a)),
       );
+    } else {
+      alert("Erro ao marcar falta. Verifique o terminal do backend.");
     }
   };
 
