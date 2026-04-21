@@ -144,3 +144,63 @@ export const getMyWaitlist = () =>
 
 export const leaveWaitlist = (id: number) =>
   api.del<{ message: string }>(`/api/v1/waitlist/${id}`);
+
+// Agendamento recorrente
+export const createRecurring = (data: {
+  professional_id: number;
+  service_id: number;
+  interval_days: number;
+  weekday: number;
+  start_time: string;
+  start_date: string;
+  end_date?: string | null;
+}) => api.post("/api/v1/recurring", data);
+
+export const getMyRecurring = () =>
+  api.get<
+    {
+      id: number;
+      professional_name: string;
+      service_name: string;
+      interval_days: number;
+      weekday: number;
+      start_time: string;
+      start_date: string;
+      end_date: string | null;
+      is_active: boolean;
+      next_date: string;
+      generated_count: number;
+    }[]
+  >("/api/v1/recurring/my");
+
+export const toggleRecurring = (id: number) =>
+  api.put<{ message: string; is_active: boolean }>(
+    `/api/v1/recurring/${id}/toggle`,
+  );
+
+export const deleteRecurring = (id: number, cancelFuture: boolean = true) =>
+  api.del<{ message: string; future_appointments_cancelled: number }>(
+    `/api/v1/recurring/${id}?cancel_future=${cancelFuture}`,
+  );
+
+export const regenerateRecurring = (id: number) =>
+  api.post(`/api/v1/recurring/${id}/regenerate`);
+
+// Configurações do sistema (admin)
+export const getSystemSettings = () =>
+  api.get<{
+    cleanup_days: number;
+    cleanup_enabled: boolean;
+    last_cleanup_at: string | null;
+    last_cleanup_count: number;
+  }>("/api/v1/system/settings");
+
+export const updateSystemSettings = (data: {
+  cleanup_days: number;
+  cleanup_enabled: boolean;
+}) => api.put("/api/v1/system/settings", data);
+
+export const runCleanupNow = () =>
+  api.post<{ deleted: number; cutoff_date: string }>(
+    "/api/v1/system/cleanup-now",
+  );

@@ -18,20 +18,30 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-# Tarefas agendadas (Celery Beat)
 celery_app.conf.beat_schedule = {
-    # Verificar lembretes a cada 30 minutos
+    # Lembretes a cada 30 minutos
     "check-reminders-every-30-min": {
         "task": "tasks.reminders.send_pending_reminders",
         "schedule": crontab(minute="*/30"),
     },
 
-    # Marcar no-shows diariamente às 22h
+    # No-shows às 22h diariamente
     "mark-no-shows-daily": {
         "task": "tasks.reminders.mark_noshows",
         "schedule": crontab(hour=22, minute=0),
     },
+
+    # Fechar mês anterior no dia 1 às 2h (gerar snapshot)
+    "close-monthly-snapshot": {
+        "task": "tasks.reminders.close_monthly_snapshot",
+        "schedule": crontab(day_of_month=1, hour=2, minute=0),
+    },
+
+    # Limpeza automática às 3h diariamente (só roda se habilitado)
+    "auto-cleanup-daily": {
+        "task": "tasks.reminders.auto_cleanup",
+        "schedule": crontab(hour=3, minute=0),
+    },
 }
 
-# Autodiscover tasks
 celery_app.autodiscover_tasks(["tasks"])

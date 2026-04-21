@@ -8,6 +8,8 @@ import {
   LogOut,
   ListChecks,
   Settings,
+  Repeat,
+  History,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -24,6 +26,7 @@ export default function Sidebar({ active, onNavigate }: SidebarProps) {
     links.push(
       { id: "my-appointments", icon: ListChecks, label: "Meus Agendamentos" },
       { id: "book", icon: CalendarPlus, label: "Novo Agendamento" },
+      { id: "recurring", icon: Repeat, label: "Recorrências" },
     );
   }
 
@@ -35,6 +38,7 @@ export default function Sidebar({ active, onNavigate }: SidebarProps) {
     links.push(
       { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
       { id: "agenda", icon: CalendarDays, label: "Agenda Geral" },
+      { id: "history", icon: History, label: "Histórico Anual" },
       { id: "admin", icon: Users, label: "Admin" },
     );
   }
@@ -46,7 +50,6 @@ export default function Sidebar({ active, onNavigate }: SidebarProps) {
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 min-h-screen flex flex-col">
-      {/* Logo */}
       <div className="p-6 border-b border-slate-800">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-600/20 flex items-center justify-center">
@@ -59,7 +62,6 @@ export default function Sidebar({ active, onNavigate }: SidebarProps) {
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
         {links.map((link) => {
           const Icon = link.icon;
@@ -81,7 +83,6 @@ export default function Sidebar({ active, onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      {/* User info — clicável → settings */}
       <div className="p-4 border-t border-slate-800">
         <button
           onClick={() => onNavigate("settings")}

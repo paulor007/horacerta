@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import Layout from "./components/layout/Layout";
@@ -8,6 +9,9 @@ import Agenda from "./pages/Agenda";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
+import MyRecurring from "./pages/MyRecurring";
+import NewRecurring from "./pages/NewRecurring";
+import YearlyHistory from "./pages/YearlyHistory";
 import PublicBooking from "./pages/PublicBooking";
 import PublicReview from "./pages/PublicReview";
 
@@ -18,6 +22,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
+  const [recurringPage, setRecurringPage] = useState<"list" | "new">("list");
+
   return (
     <Layout>
       {(activePage, setActivePage) => {
@@ -32,8 +38,19 @@ function AppContent() {
             return <Dashboard />;
           case "admin":
             return <Admin />;
+          case "history":
+            return <YearlyHistory onBack={() => setActivePage("dashboard")} />;
           case "settings":
             return <Settings onBack={() => setActivePage("my-appointments")} />;
+          case "recurring":
+            return recurringPage === "new" ? (
+              <NewRecurring
+                onBack={() => setRecurringPage("list")}
+                onDone={() => setRecurringPage("list")}
+              />
+            ) : (
+              <MyRecurring onNewRecurring={() => setRecurringPage("new")} />
+            );
           default:
             return <MyAppointments />;
         }
