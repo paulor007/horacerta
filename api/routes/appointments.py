@@ -13,6 +13,7 @@ import asyncio
 import logging
 
 from datetime import datetime, timedelta
+from datetime import date
 from datetime import date as date_type
 from datetime import time as time_type
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -463,3 +464,61 @@ def test_notify(
         return {"message": "Notificação enviada", "result": result}
     except Exception as e:
         return {"message": "Erro ao notificar", "error": str(e)}
+    
+@router.get("/agenda")
+def get_agenda(
+    start_date: date = Query(..., description="Data inicial (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="Data final (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Agenda com range de datas e filtros.
+    - Admin: vê tudo
+    - Profissional: só os próprios agendamentos
+    - Cliente: 403
+    """
+    if user.role == "client":
+        raise HTTPException(status_code=403, detail="Sem permissão")
+ 
+    query = (
+        db.query(Appointment)
+        .options(
+            joinedload(Appointment.client),
+            joinedload(Appointment.service),
+            joinedload(Appointment.professional).joinedload(Professional.user),
+        )
+        .filter(
+            Appointment.date >= start_date,
+            Appointment.date <= end_date,
+        )
+    )
+ 
+    # Profissional vê só os próprios
+    if user.role == "professional":
+        prof = db.query(Professional).filter(Professional.user_id == user.id).first()
+        if not prof:
+            raise HTTPException(status_code=404, detail="Perfil profissional não encontrado")
+        query = query.filter(Appointment.professional_id == prof.id)
+ 
+    apts = query.order_by(Appointment.date, Appointment.start_time).all()
+ 
+    return [
+        {
+            "id": a.id,
+            "date": a.date.isoformat(),
+            "start_time": a.start_time.isoformat(),
+            "end_time": a.end_time.isoformat(),
+            "status": a.status,
+            "client_id": a.client_id,
+            "client_name": a.client.name if a.client else None,
+            "service_id": a.service_id,
+            "service_name": a.service.name if a.service else None,
+            "service_duration": a.service.duration_min if a.service else None,
+            "professional_id": a.professional_id,
+            "professional_name": (
+                a.professional.user.name if a.professional and a.professional.user else None
+            ),
+        }
+        for a in apts
+    ]
