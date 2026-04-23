@@ -204,3 +204,66 @@ export const runCleanupNow = () =>
   api.post<{ deleted: number; cutoff_date: string }>(
     "/api/v1/system/cleanup-now",
   );
+
+export interface ProfessionalStats {
+  professional: {
+    id: number;
+    name: string;
+    email: string;
+    avatar_url: string | null;
+  };
+  period: {
+    start: string;
+    end: string;
+    days: number;
+  };
+  totals: {
+    appointments_total: number;
+    appointments_completed: number;
+    appointments_cancelled: number;
+    appointments_no_show: number;
+    revenue: number;
+    completion_rate: number;
+    cancellation_rate: number;
+    no_show_rate: number;
+  };
+  ratings: {
+    count: number;
+    average: number;
+    distribution: Record<string, number>;
+  };
+  revenue_by_month: {
+    month: string;
+    month_label: string;
+    revenue: number;
+    appointments: number;
+  }[];
+  top_services: {
+    service_name: string;
+    count: number;
+    revenue: number;
+  }[];
+  top_clients: {
+    client_name: string;
+    appointments: number;
+    revenue: number;
+  }[];
+}
+
+export const getProfessionalStats = (
+  params: {
+    professional_id?: number;
+    start_date?: string;
+    end_date?: string;
+  } = {},
+) => {
+  const qs = new URLSearchParams();
+  if (params.professional_id)
+    qs.append("professional_id", String(params.professional_id));
+  if (params.start_date) qs.append("start_date", params.start_date);
+  if (params.end_date) qs.append("end_date", params.end_date);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return api.get<ProfessionalStats>(
+    `/api/v1/reports/professional-stats${suffix}`,
+  );
+};

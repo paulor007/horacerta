@@ -15,7 +15,9 @@ from api.routes.waitlist_routes import router as waitlist_router
 from api.routes.recurring_routes import router as recurring_router
 from api.routes.settings_route import router as system_router
 from api.routes.snapshots_route import router as snapshots_router
+from api.routes import professional_stats
 from websocket.routes import router as ws_router
+
 
 app = FastAPI(
     title="HoraCerta",
@@ -44,6 +46,7 @@ app.include_router(waitlist_router)
 app.include_router(recurring_router)
 app.include_router(system_router)
 app.include_router(snapshots_router)
+app.include_router(professional_stats.router)
 app.include_router(ws_router)
 
 

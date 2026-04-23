@@ -10,6 +10,7 @@ import {
   Settings,
   Repeat,
   History,
+  BarChart3,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -31,13 +32,17 @@ export default function Sidebar({ active, onNavigate }: SidebarProps) {
   }
 
   if (user?.role === "professional") {
-    links.push({ id: "agenda", icon: CalendarDays, label: "Minha Agenda" });
+    links.push(
+      { id: "agenda", icon: CalendarDays, label: "Minha Agenda" },
+      { id: "stats", icon: BarChart3, label: "Estatísticas" },
+    );
   }
 
   if (user?.role === "admin") {
     links.push(
       { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
       { id: "agenda", icon: CalendarDays, label: "Agenda Geral" },
+      { id: "stats", icon: BarChart3, label: "Estatísticas" },
       { id: "history", icon: History, label: "Histórico Anual" },
       { id: "admin", icon: Users, label: "Admin" },
     );

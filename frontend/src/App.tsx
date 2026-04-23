@@ -12,6 +12,7 @@ import Settings from "./pages/Settings";
 import MyRecurring from "./pages/MyRecurring";
 import NewRecurring from "./pages/NewRecurring";
 import YearlyHistory from "./pages/YearlyHistory";
+import MyStats from "./pages/MyStats";
 import PublicBooking from "./pages/PublicBooking";
 import PublicReview from "./pages/PublicReview";
 
@@ -40,6 +41,8 @@ function AppContent() {
             return <Admin />;
           case "history":
             return <YearlyHistory onBack={() => setActivePage("dashboard")} />;
+          case "stats":
+            return <MyStats />;
           case "settings":
             return <Settings onBack={() => setActivePage("my-appointments")} />;
           case "recurring":
