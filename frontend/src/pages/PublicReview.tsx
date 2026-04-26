@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Star, Clock, Check, AlertCircle } from "lucide-react";
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
 interface ReviewInfo {
   already_reviewed: boolean;
   rating?: number;
@@ -27,7 +28,7 @@ export default function PublicReview() {
 
   useEffect(() => {
     if (!token) return;
-    fetch(`/api/v1/public/review?token=${token}`)
+    fetch(`${API_BASE}/api/v1/public/review?token=${token}`)
       .then((r) => r.json())
       .then((data) => {
         setInfo(data);
@@ -42,11 +43,14 @@ export default function PublicReview() {
     setError("");
 
     try {
-      const res = await fetch(`/api/v1/public/review?token=${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, comment: comment.trim() || null }),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/v1/public/review?token=${token}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rating, comment: comment.trim() || null }),
+        },
+      );
 
       if (res.ok) {
         setSubmitted(true);

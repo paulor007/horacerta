@@ -7,6 +7,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { api } from "../api/client";
+import ExportButton from "../components/ExportButton";
+import { exportToCSV, exportToPDF } from "../utils/exportUtils";
 
 interface MonthData {
   month: number;
@@ -63,28 +65,137 @@ export default function YearlyHistory({ onBack }: YearlyHistoryProps) {
   const [loadKey, setLoadKey] = useState(0);
 
   useEffect(() => {
-    Promise.all([
-      api.get<YearlyData>(`/api/v1/snapshots/yearly-revenue?year=${year}`),
-      api.get<SnapshotItem[]>(`/api/v1/snapshots?year=${year}`),
-    ]).then(([y, s]) => {
-      setYearly(y);
-      setSnapshots(s || []);
-      setLoading(false);
-    });
-  }, [year, loadKey]);
+    setLoadKey((k) => k + 1);
+  }, [year]);
+
+  useEffect(() => {
+    if (loadKey === 0) return;
+    let cancelled = false;
+    const fetchData = async () => {
+      const [y, s] = await Promise.all([
+        api.get<YearlyData>(`/api/v1/snapshots/yearly-revenue?year=${year}`),
+        api.get<SnapshotItem[]>(`/api/v1/snapshots?year=${year}`),
+      ]);
+      if (!cancelled) {
+        setYearly(y);
+        setSnapshots(s || []);
+        setLoading(false);
+      }
+    };
+    fetchData();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadKey]);
 
   const handleRegenerate = async () => {
     if (!confirm("Regenerar snapshots dos meses passados?")) return;
     setRegenerating(true);
     await api.post("/api/v1/snapshots/generate-missing");
     setRegenerating(false);
-    setLoading(true);
     setLoadKey((k) => k + 1);
   };
 
   const maxRevenue = yearly
     ? Math.max(...yearly.months.map((m) => m.total_revenue), 1)
     : 1;
+
+  // ── Exportação ──
+  const handleExportCSV = () => {
+    if (!yearly) return;
+
+    const rows: (string | number)[][] = [];
+
+    rows.push(["RESUMO ANUAL"]);
+    rows.push(["Ano", yearly.year]);
+    rows.push(["Faturamento total", `R$ ${yearly.total_revenue.toFixed(2)}`]);
+    rows.push(["Atendimentos concluídos", yearly.total_completed]);
+    rows.push([
+      "Ticket médio",
+      yearly.total_completed > 0
+        ? `R$ ${(yearly.total_revenue / yearly.total_completed).toFixed(2)}`
+        : "R$ 0,00",
+    ]);
+    rows.push([]);
+
+    rows.push(["FATURAMENTO POR MÊS"]);
+    rows.push(["Mês", "Atendimentos", "Faturamento"]);
+    yearly.months.forEach((m) => {
+      rows.push([
+        MONTH_NAMES[m.month],
+        m.total_completed,
+        `R$ ${m.total_revenue.toFixed(2)}`,
+      ]);
+    });
+
+    if (snapshots.length > 0) {
+      rows.push([]);
+      rows.push(["DETALHAMENTO MENSAL"]);
+      rows.push([
+        "Mês",
+        "Concluídos",
+        "Cancelados",
+        "Faltas",
+        "Clientes",
+        "Faturamento",
+      ]);
+      snapshots.forEach((s) => {
+        rows.push([
+          MONTH_NAMES[s.month],
+          s.total_completed,
+          s.total_cancelled,
+          s.total_no_show,
+          s.unique_clients,
+          `R$ ${Number(s.total_revenue).toFixed(2)}`,
+        ]);
+      });
+    }
+
+    exportToCSV(
+      `historico_anual_${year}`,
+      ["Coluna 1", "Coluna 2", "Coluna 3", "Coluna 4", "Coluna 5", "Coluna 6"],
+      rows,
+    );
+  };
+
+  const handleExportPDF = () => {
+    if (!yearly) return;
+
+    const ticketMedio =
+      yearly.total_completed > 0
+        ? yearly.total_revenue / yearly.total_completed
+        : 0;
+
+    const rows: (string | number)[][] = [];
+    yearly.months.forEach((m) => {
+      rows.push([
+        MONTH_NAMES[m.month],
+        String(m.total_completed),
+        `R$ ${m.total_revenue.toFixed(2)}`,
+      ]);
+    });
+
+    exportToPDF({
+      filename: `historico_anual_${year}`,
+      title: `Histórico Anual — ${year}`,
+      subtitle: "Faturamento consolidado (preservado indefinidamente)",
+      kpis: [
+        {
+          label: "Faturamento anual",
+          value: `R$ ${yearly.total_revenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+        },
+        { label: "Atendimentos", value: String(yearly.total_completed) },
+        {
+          label: "Ticket médio",
+          value: `R$ ${ticketMedio.toFixed(2)}`,
+        },
+      ],
+      headers: ["Mês", "Atendimentos concluídos", "Faturamento"],
+      rows,
+      orientation: "portrait",
+    });
+  };
 
   return (
     <div>
@@ -95,7 +206,7 @@ export default function YearlyHistory({ onBack }: YearlyHistoryProps) {
         ← Voltar
       </button>
 
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-3">
             <Calendar className="w-7 h-7 text-emerald-500" />
@@ -106,13 +217,17 @@ export default function YearlyHistory({ onBack }: YearlyHistoryProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {yearly && (
+            <ExportButton
+              onExportCSV={handleExportCSV}
+              onExportPDF={handleExportPDF}
+              disabled={loading}
+            />
+          )}
           <select
             value={year}
-            onChange={(e) => {
-              setLoading(true);
-              setYear(Number(e.target.value));
-            }}
+            onChange={(e) => setYear(Number(e.target.value))}
             className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-emerald-500/50"
           >
             {[
@@ -145,7 +260,6 @@ export default function YearlyHistory({ onBack }: YearlyHistoryProps) {
         </div>
       ) : (
         <>
-          {/* KPIs anuais */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-2">
@@ -184,7 +298,6 @@ export default function YearlyHistory({ onBack }: YearlyHistoryProps) {
             </div>
           </div>
 
-          {/* Gráfico mensal */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-8">
             <h2 className="text-white font-semibold mb-5">
               Faturamento por Mês
@@ -220,7 +333,6 @@ export default function YearlyHistory({ onBack }: YearlyHistoryProps) {
             </div>
           </div>
 
-          {/* Tabela de snapshots por profissional */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
             <h2 className="text-white font-semibold mb-5">
               Detalhamento Mensal

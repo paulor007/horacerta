@@ -50,12 +50,15 @@ const STEP_LIST: { key: Step; label: string; short: string }[] = [
   { key: "confirm", label: "Confirmar", short: "OK" },
 ];
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 async function apiFetch<T>(
   url: string,
   options?: RequestInit,
 ): Promise<T | null> {
   try {
-    const res = await fetch(url, options);
+    const fullUrl = url.startsWith("http") ? url : `${API_BASE}${url}`;
+    const res = await fetch(fullUrl, options);
     if (!res.ok) {
       console.error(`[API] ${url} → ${res.status}`);
       return null;
@@ -189,19 +192,6 @@ export default function PublicBooking() {
     } else {
       setError("Erro ao agendar. Horário pode já estar ocupado.");
     }
-  };
-
-  const reset = () => {
-    setStep("info");
-    setSelectedProf(null);
-    setSelectedService(null);
-    setSelectedDate("");
-    setSelectedTime(null);
-    setClientName("");
-    setClientPhone("");
-    setClientEmail("");
-    setError("");
-    setBookingResult(null);
   };
 
   const stepIndex = STEP_LIST.findIndex((s) => s.key === step);
@@ -535,7 +525,7 @@ export default function PublicBooking() {
                       setJoiningWaitlist(true);
                       try {
                         const res = await fetch(
-                          "/api/v1/waitlist/public/join",
+                          `${API_BASE}/api/v1/waitlist/public/join`,
                           {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },

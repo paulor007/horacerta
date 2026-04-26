@@ -6,8 +6,17 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
-core/config.py
 .mypy_cache/
 .ruff_cache/
 node_modules/
 frontend/dist/
+frontend/.vercel/
+
+# Uploads locais (em prod usa volume/S3)
+uploads/avatars/*
+!uploads/avatars/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp

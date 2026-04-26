@@ -1,4 +1,7 @@
 import { api } from "./client";
+
+// Para fetch direto (sem auth), usa a mesma base do cliente
+const API_BASE = import.meta.env.VITE_API_URL || "";
 import type {
   Professional,
   Service,
@@ -115,7 +118,7 @@ export const joinWaitlistPublic = (data: {
   service_id: number;
   date: string;
 }) =>
-  fetch("/api/v1/waitlist/public/join", {
+  fetch(`${API_BASE}/api/v1/waitlist/public/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),

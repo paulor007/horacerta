@@ -28,6 +28,8 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { getProfessionalStats } from "../api/endpoints";
+import ExportButton from "../components/ExportButton";
+import { exportToCSV, exportToPDF } from "../utils/exportUtils";
 
 interface ProfessionalStats {
   professional: {
@@ -103,7 +105,6 @@ export default function MyStats() {
   const [selectedProfId, setSelectedProfId] = useState<number | null>(null);
   const [periodDays, setPeriodDays] = useState(90);
 
-  // Carrega lista de profissionais (apenas admin)
   useEffect(() => {
     if (!isAdmin) return;
     api
@@ -119,7 +120,6 @@ export default function MyStats() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
-  // Carrega estatísticas
   useEffect(() => {
     if (isAdmin && !selectedProfId) return;
 
@@ -173,17 +173,168 @@ export default function MyStats() {
   const hasNoCompletedData =
     stats !== null && stats.totals.appointments_completed === 0;
 
+  // ── Exportação ──
+  const handleExportCSV = () => {
+    if (!stats) return;
+    const filename = `estatisticas_${slugify(stats.professional.name)}`;
+
+    // Monta várias "seções" em um CSV único
+    const rows: (string | number)[][] = [];
+
+    rows.push(["RELATÓRIO DO PROFISSIONAL"]);
+    rows.push(["Nome", stats.professional.name]);
+    rows.push(["Email", stats.professional.email]);
+    rows.push([
+      "Período",
+      `${formatDateBR(stats.period.start)} até ${formatDateBR(stats.period.end)}`,
+    ]);
+    rows.push([]);
+
+    rows.push(["TOTAIS"]);
+    rows.push(["Atendimentos no período", stats.totals.appointments_total]);
+    rows.push(["Concluídos", stats.totals.appointments_completed]);
+    rows.push(["Cancelados", stats.totals.appointments_cancelled]);
+    rows.push(["Faltas", stats.totals.appointments_no_show]);
+    rows.push(["Agendados (em aberto)", stats.totals.appointments_scheduled]);
+    rows.push(["Faturamento", `R$ ${stats.totals.revenue.toFixed(2)}`]);
+    rows.push(["Taxa de conclusão (%)", stats.totals.completion_rate]);
+    rows.push(["Taxa de cancelamento (%)", stats.totals.cancellation_rate]);
+    rows.push(["Taxa de falta (%)", stats.totals.no_show_rate]);
+    rows.push([]);
+
+    rows.push(["AVALIAÇÕES"]);
+    rows.push(["Total de avaliações", stats.ratings.count]);
+    rows.push(["Média", stats.ratings.average]);
+    rows.push([]);
+
+    if (stats.revenue_by_month.length > 0) {
+      rows.push(["FATURAMENTO POR MÊS"]);
+      rows.push(["Mês", "Atendimentos", "Faturamento"]);
+      stats.revenue_by_month.forEach((m) => {
+        rows.push([
+          m.month_label,
+          m.appointments,
+          `R$ ${m.revenue.toFixed(2)}`,
+        ]);
+      });
+      rows.push([]);
+    }
+
+    if (stats.top_services.length > 0) {
+      rows.push(["TOP SERVIÇOS"]);
+      rows.push(["#", "Serviço", "Atendimentos", "Faturamento"]);
+      stats.top_services.forEach((s, i) => {
+        rows.push([
+          i + 1,
+          s.service_name,
+          s.count,
+          `R$ ${s.revenue.toFixed(2)}`,
+        ]);
+      });
+      rows.push([]);
+    }
+
+    if (stats.top_clients.length > 0) {
+      rows.push(["TOP CLIENTES"]);
+      rows.push(["#", "Cliente", "Atendimentos", "Faturamento"]);
+      stats.top_clients.forEach((c, i) => {
+        rows.push([
+          i + 1,
+          c.client_name,
+          c.appointments,
+          `R$ ${c.revenue.toFixed(2)}`,
+        ]);
+      });
+    }
+
+    exportToCSV(filename, ["Campo", "Valor", "Valor 2", "Valor 3"], rows);
+  };
+
+  const handleExportPDF = () => {
+    if (!stats) return;
+
+    // Monta linhas combinando top serviços e clientes em uma tabela
+    const rows: (string | number)[][] = [];
+
+    if (stats.revenue_by_month.length > 0) {
+      stats.revenue_by_month.forEach((m) => {
+        rows.push([
+          "Faturamento mensal",
+          m.month_label,
+          String(m.appointments),
+          `R$ ${m.revenue.toFixed(2)}`,
+        ]);
+      });
+    }
+
+    if (stats.top_services.length > 0) {
+      stats.top_services.forEach((s, i) => {
+        rows.push([
+          `Top serviço #${i + 1}`,
+          s.service_name,
+          `${s.count} atend.`,
+          `R$ ${s.revenue.toFixed(2)}`,
+        ]);
+      });
+    }
+
+    if (stats.top_clients.length > 0) {
+      stats.top_clients.forEach((c, i) => {
+        rows.push([
+          `Top cliente #${i + 1}`,
+          c.client_name,
+          `${c.appointments} atend.`,
+          `R$ ${c.revenue.toFixed(2)}`,
+        ]);
+      });
+    }
+
+    if (rows.length === 0) {
+      rows.push(["—", "Sem dados no período", "—", "—"]);
+    }
+
+    exportToPDF({
+      filename: `estatisticas_${slugify(stats.professional.name)}`,
+      title: `Relatório de ${stats.professional.name}`,
+      subtitle: `${formatDateBR(stats.period.start)} até ${formatDateBR(stats.period.end)} · ${stats.period.days} dias`,
+      kpis: [
+        {
+          label: "Concluídos",
+          value: String(stats.totals.appointments_completed),
+        },
+        { label: "Faturamento", value: formatMoney(stats.totals.revenue) },
+        {
+          label: "Avaliação",
+          value: stats.ratings.average > 0 ? `${stats.ratings.average} ★` : "—",
+        },
+        { label: "Taxa de falta", value: `${stats.totals.no_show_rate}%` },
+      ],
+      headers: ["Categoria", "Item", "Quantidade", "Valor"],
+      rows,
+      orientation: "portrait",
+    });
+  };
+
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-          <BarChart3 className="w-7 h-7 text-emerald-500" />
-          {isAdmin ? "Estatísticas do Profissional" : "Minhas Estatísticas"}
-        </h1>
-        <p className="text-slate-400 text-sm mt-1">
-          Desempenho, faturamento e avaliações no período
-        </p>
+      <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+            <BarChart3 className="w-7 h-7 text-emerald-500" />
+            {isAdmin ? "Estatísticas do Profissional" : "Minhas Estatísticas"}
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">
+            Desempenho, faturamento e avaliações no período
+          </p>
+        </div>
+
+        {stats && (
+          <ExportButton
+            onExportCSV={handleExportCSV}
+            onExportPDF={handleExportPDF}
+            disabled={loading}
+          />
+        )}
       </div>
 
       {/* Filtros */}
@@ -246,7 +397,6 @@ export default function MyStats() {
 
       {!loading && stats && (
         <>
-          {/* Header do profissional */}
           <div className="bg-linear-to-r from-emerald-600/20 to-emerald-700/10 border border-emerald-500/20 rounded-2xl p-6 mb-6">
             <div className="flex items-center gap-4">
               <ProfessionalAvatar
@@ -262,14 +412,13 @@ export default function MyStats() {
                   {stats.professional.email}
                 </p>
                 <p className="text-slate-400 text-xs mt-2">
-                  {formatDate(stats.period.start)} a{" "}
-                  {formatDate(stats.period.end)} · {stats.period.days} dias
+                  {formatDateBR(stats.period.start)} a{" "}
+                  {formatDateBR(stats.period.end)} · {stats.period.days} dias
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Aviso quando só tem scheduled, sem completed */}
           {hasNoCompletedData && stats.totals.appointments_scheduled > 0 && (
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-5 mb-6 flex gap-3">
               <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
@@ -282,7 +431,7 @@ export default function MyStats() {
                   <strong className="text-white">
                     {stats.totals.appointments_scheduled}
                   </strong>{" "}
-                  agendamentos em aberto, mas as estatísticas de faturamento e
+                  agendamentos em aberto. As estatísticas de faturamento e
                   avaliações começam a aparecer quando eles são marcados como{" "}
                   <strong className="text-emerald-400">Concluídos</strong> na
                   Agenda.
@@ -305,7 +454,6 @@ export default function MyStats() {
               </div>
             )}
 
-          {/* Cards principais */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatCard
               label="Atendimentos concluídos"
@@ -356,7 +504,6 @@ export default function MyStats() {
             />
           </div>
 
-          {/* Gráfico faturamento mensal */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-6">
             <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-emerald-400" />
@@ -405,7 +552,6 @@ export default function MyStats() {
             )}
           </div>
 
-          {/* Distribuição de avaliações + Top serviços */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
               <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
@@ -490,7 +636,6 @@ export default function MyStats() {
             </div>
           </div>
 
-          {/* Top clientes */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-6">
             <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
               <Users className="w-4 h-4 text-emerald-400" />
@@ -545,7 +690,6 @@ export default function MyStats() {
             )}
           </div>
 
-          {/* Mini stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <MiniStat
               label="Taxa de conclusão"
@@ -568,10 +712,6 @@ export default function MyStats() {
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────
-// Subcomponentes
-// ─────────────────────────────────────────────────────────────
 
 function ProfessionalAvatar({
   name,
@@ -653,7 +793,6 @@ function MiniStat({ label, value, accent }: MiniStatProps) {
   );
 }
 
-// Helpers
 function formatMoney(v: number): string {
   return `R$ ${v.toLocaleString("pt-BR", {
     minimumFractionDigits: 2,
@@ -661,7 +800,16 @@ function formatMoney(v: number): string {
   })}`;
 }
 
-function formatDate(iso: string): string {
+function formatDateBR(iso: string): string {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
+}
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
 }

@@ -1,3 +1,13 @@
+/**
+ * Cliente HTTP do frontend.
+ *
+ * Em DEV: VITE_API_URL é vazio -> usa proxy do Vite (vite.config.ts)
+ * Em PROD: VITE_API_URL é a URL completa do backend Railway
+ *          ex: https://horacerta-backend.up.railway.app
+ */
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 const STORAGE_KEY_TOKEN = "horacerta_token";
 const STORAGE_KEY_USER = "horacerta_user";
 const STORAGE_KEY_ACTIVITY = "horacerta_last_activity";
@@ -7,7 +17,6 @@ class ApiClient {
   private token: string | null = null;
 
   constructor() {
-    // Tenta sessionStorage primeiro, depois localStorage (lembrar de mim)
     this.token =
       sessionStorage.getItem(STORAGE_KEY_TOKEN) ||
       localStorage.getItem(STORAGE_KEY_TOKEN);
@@ -45,6 +54,10 @@ class ApiClient {
     return h;
   }
 
+  private url(endpoint: string): string {
+    return `${API_BASE}${endpoint}`;
+  }
+
   private handleUnauthorized(res: Response): void {
     if (res.status === 401 && this.token) {
       this.clearToken();
@@ -54,7 +67,7 @@ class ApiClient {
 
   async get<T>(endpoint: string): Promise<T | null> {
     try {
-      const res = await fetch(endpoint, { headers: this.headers() });
+      const res = await fetch(this.url(endpoint), { headers: this.headers() });
       this.handleUnauthorized(res);
       if (!res.ok) return null;
       return await res.json();
@@ -65,7 +78,7 @@ class ApiClient {
 
   async post<T>(endpoint: string, body?: unknown): Promise<T | null> {
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(this.url(endpoint), {
         method: "POST",
         headers: this.headers(),
         body: body ? JSON.stringify(body) : undefined,
@@ -80,7 +93,7 @@ class ApiClient {
 
   async put<T>(endpoint: string, body?: unknown): Promise<T | null> {
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(this.url(endpoint), {
         method: "PUT",
         headers: this.headers(),
         body: body ? JSON.stringify(body) : undefined,
@@ -95,7 +108,7 @@ class ApiClient {
 
   async del<T>(endpoint: string): Promise<T | null> {
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(this.url(endpoint), {
         method: "DELETE",
         headers: this.headers(),
       });
@@ -112,7 +125,7 @@ class ApiClient {
     password: string,
   ): Promise<{ access_token: string; role: string; name: string } | null> {
     try {
-      const res = await fetch("/auth/token", {
+      const res = await fetch(this.url("/auth/token"), {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ username: email, password }),
@@ -122,6 +135,11 @@ class ApiClient {
     } catch {
       return null;
     }
+  }
+
+  /** URL pública absoluta (para WebSocket, downloads, imagens, etc) */
+  getApiBaseUrl(): string {
+    return API_BASE;
   }
 }
 

@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+venv
+.venv
+env
+.env
+.env.local
+
+# Frontend (não entra na imagem do backend)
+frontend
+
+# Arquivos locais
+uploads/avatars/*
+!uploads/avatars/.gitkeep
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# Outros
+README.md
+docs
+tests
+.github
+docker-compose.yml
+Dockerfile
+.dockerignore

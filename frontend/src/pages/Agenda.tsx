@@ -20,6 +20,8 @@ import {
   getServices,
 } from "../api/endpoints";
 import type { Appointment, Service } from "../types";
+import ExportButton from "../components/ExportButton";
+import { exportToCSV, exportToPDF } from "../utils/exportUtils";
 
 interface ProfessionalListItem {
   id: number;
@@ -97,14 +99,14 @@ export default function Agenda() {
     });
   }, [isAdmin]);
 
-  // Calcula período baseado no filtro
+  // Calcula período
   const { startDate, endDate } = useMemo(() => {
     const today = new Date();
     const start = new Date(today);
     const end = new Date(today);
 
     if (periodFilter === "today") {
-      // start e end = hoje
+      // hoje só
     } else if (periodFilter === "week") {
       start.setDate(today.getDate() - 3);
       end.setDate(today.getDate() + 7);
@@ -124,12 +126,12 @@ export default function Agenda() {
     };
   }, [periodFilter, customStart, customEnd]);
 
-  // Dispara novo load quando filtros de período mudam
+  // Dispara reload quando período muda
   useEffect(() => {
     setLoadKey((k) => k + 1);
   }, [startDate, endDate]);
 
-  // Busca agendamentos — padrão loadKey (mesmo do Dashboard/YearlyHistory)
+  // Busca agendamentos — padrão loadKey
   useEffect(() => {
     if (loadKey === 0) return;
     let cancelled = false;
@@ -142,7 +144,6 @@ export default function Agenda() {
         `/api/v1/appointments/agenda?${params.toString()}`,
       );
       if (!data) {
-        // Fallback pro endpoint antigo se o /agenda ainda não estiver implantado
         data = await api.get<Appointment[]>(
           `/api/v1/appointments/today?date=${startDate}`,
         );
@@ -159,7 +160,7 @@ export default function Agenda() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadKey]);
 
-  // Aplica filtros client-side
+  // Filtros client-side
   const filtered = useMemo(() => {
     return appointments.filter((apt) => {
       if (searchText.trim()) {
@@ -189,7 +190,6 @@ export default function Agenda() {
     serviceFilter,
   ]);
 
-  // Agrupa por data
   const grouped = useMemo(() => {
     const map: Record<string, Appointment[]> = {};
     for (const apt of filtered) {
@@ -203,7 +203,6 @@ export default function Agenda() {
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
 
-  // Contadores por status
   const statusCounts = useMemo(() => {
     const counts = {
       all: appointments.length,
@@ -275,6 +274,54 @@ export default function Agenda() {
 
   const canChangeStatus = (status: string) => status === "scheduled";
 
+  // ── Exportação ──
+  const buildExportRows = (): (string | number)[][] => {
+    return filtered.map((a) => [
+      formatDateBR(a.date),
+      a.start_time.slice(0, 5),
+      a.end_time.slice(0, 5),
+      a.client_name || "—",
+      a.professional_name || "—",
+      a.service_name || "—",
+      STATUS_LABELS[a.status]?.label || a.status,
+    ]);
+  };
+
+  const exportHeaders = [
+    "Data",
+    "Início",
+    "Fim",
+    "Cliente",
+    "Profissional",
+    "Serviço",
+    "Status",
+  ];
+
+  const handleExportCSV = () => {
+    exportToCSV("agenda_horacerta", exportHeaders, buildExportRows());
+  };
+
+  const handleExportPDF = () => {
+    const subtitle = `${formatDateBR(startDate)} até ${formatDateBR(endDate)} · ${filtered.length} ${
+      filtered.length === 1 ? "agendamento" : "agendamentos"
+    }`;
+    exportToPDF({
+      filename: "agenda_horacerta",
+      title: isAdmin ? "Agenda Geral" : "Minha Agenda",
+      subtitle,
+      kpis: [
+        { label: "Total", value: String(statusCounts.all) },
+        { label: "Agendados", value: String(statusCounts.scheduled) },
+        { label: "Concluídos", value: String(statusCounts.completed) },
+        { label: "Cancelados", value: String(statusCounts.cancelled) },
+        { label: "Faltas", value: String(statusCounts.no_show) },
+      ],
+      headers: exportHeaders,
+      rows: buildExportRows(),
+      orientation: "landscape",
+    });
+  };
+
   return (
     <div>
       {/* Header */}
@@ -289,22 +336,29 @@ export default function Agenda() {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowFilters((v) => !v)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${
-            showFilters || activeFiltersCount > 0
-              ? "bg-emerald-600/15 text-emerald-400 border border-emerald-500/30"
-              : "bg-slate-800 border border-slate-700 text-slate-300 hover:border-slate-600"
-          }`}
-        >
-          <Filter className="w-4 h-4" />
-          Filtros
-          {activeFiltersCount > 0 && (
-            <span className="bg-emerald-500 text-slate-950 rounded-full w-5 h-5 text-xs font-bold flex items-center justify-center">
-              {activeFiltersCount}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <ExportButton
+            onExportCSV={handleExportCSV}
+            onExportPDF={handleExportPDF}
+            disabled={filtered.length === 0}
+          />
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${
+              showFilters || activeFiltersCount > 0
+                ? "bg-emerald-600/15 text-emerald-400 border border-emerald-500/30"
+                : "bg-slate-800 border border-slate-700 text-slate-300 hover:border-slate-600"
+            }`}
+          >
+            <Filter className="w-4 h-4" />
+            Filtros
+            {activeFiltersCount > 0 && (
+              <span className="bg-emerald-500 text-slate-950 rounded-full w-5 h-5 text-xs font-bold flex items-center justify-center">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Busca */}
@@ -359,7 +413,7 @@ export default function Agenda() {
         })}
       </div>
 
-      {/* Painel de filtros avançados */}
+      {/* Filtros avançados */}
       {showFilters && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -526,10 +580,6 @@ export default function Agenda() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Card do agendamento
-// ─────────────────────────────────────────────────────────────
-
 interface AppointmentCardProps {
   apt: Appointment;
   isAdmin: boolean;
@@ -619,9 +669,10 @@ function AppointmentCard({
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
+function formatDateBR(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
 
 function formatDateHeader(iso: string): string {
   const d = new Date(iso + "T12:00:00");
