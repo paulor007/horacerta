@@ -1,0 +1,75 @@
+# Render Blueprint para HoraCerta
+# Este arquivo cria automaticamente: Backend + PostgreSQL + Redis
+# Documentação: https://render.com/docs/blueprint-spec
+
+databases:
+  - name: horacerta-db
+    plan: free
+    databaseName: horacerta
+    user: horacerta
+
+services:
+  # ── Redis (Key Value) ──
+  - type: keyvalue
+    name: horacerta-redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: [] # apenas serviços internos
+
+  # ── Backend FastAPI ──
+  - type: web
+    name: horacerta-api
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Conexões automáticas com Postgres e Redis
+      - key: DATABASE_URL
+        fromDatabase:
+          name: horacerta-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: horacerta-redis
+          type: keyvalue
+          property: connectionString
+
+      # JWT — Render gera valor único na primeira deploy
+      - key: SECRET_KEY
+        generateValue: true
+
+      # Configs fixas
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: ENVIRONMENT
+        value: production
+      - key: EMPRESA_NOME
+        value: Barbearia Horizonte
+
+      # CORS — atualize após deploy do Vercel
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: FRONTEND_URL
+        value: "https://horacerta.vercel.app"
+
+      # Email (vamos preencher na Entrega 2)
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USER
+        sync: false # você preenche manualmente no painel
+      - key: EMAIL_PASSWORD
+        sync: false # você preenche manualmente no painel
+
+      # WhatsApp CallMeBot (vamos preencher na Entrega 2)
+      - key: CALLMEBOT_PHONE
+        sync: false
+      - key: CALLMEBOT_APIKEY
+        sync: false

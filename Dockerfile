@@ -1,31 +1,35 @@
 FROM python:3.13-slim
 
+# Variáveis de build
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /app
 
-# Dependências do sistema (para compilar algumas libs Python)
+# Dependências do sistema (libpq-dev para psycopg2)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copia requirements (cache de layer)
+# Cache de dependências Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
 # Copia o resto do código
 COPY . .
 
-# Cria diretório de uploads (avatars)
+# Cria diretório de uploads
 RUN mkdir -p uploads/avatars
 
-# Railway passa a porta via $PORT
+# Render injeta a variável PORT — usa 8000 como fallback local
 ENV PORT=8000
 EXPOSE 8000
 
-# Healthcheck simples
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health').read()" || exit 1
-
-# Em produção: roda migrations antes do uvicorn
-CMD alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${PORT} --workers 2
+# Roda migrations + uvicorn
+# Render usa esse comando final, mas o startCommand do dashboard pode sobrepor
+CMD alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${PORT}
