@@ -51,42 +51,57 @@ def db_status(token: str = Query(...)):
 
 
 @router.post("/run-seed")
-def run_seed(token: str = Query(...)):
-    """Roda o data/seed.py — popula admin, profissionais, serviços e agendamentos."""
+def run_seed(token: str = Query(...), force: bool = Query(False)):
+    """
+    Roda o data/seed.py — popula admin, profissionais, serviços e agendamentos.
+
+    Use ?force=true para forçar re-seed mesmo se já houver dados.
+    """
     _verify_token(token)
 
-    # Verifica se já tem dados (evita rodar duas vezes)
-    db = SessionLocal()
-    try:
-        existing = db.execute(text("SELECT COUNT(*) FROM users")).scalar()
-        if existing and existing > 0:
-            return {
-                "status": "skipped",
-                "message": f"Banco já populado ({existing} usuários). "
-                           "Para recriar, use /reset-db primeiro.",
-            }
-    finally:
-        db.close()
+    # Verifica se já tem dados (evita rodar duas vezes sem querer)
+    if not force:
+        db = SessionLocal()
+        try:
+            existing = db.execute(text("SELECT COUNT(*) FROM users")).scalar()
+            if existing and existing > 0:
+                return {
+                    "status": "skipped",
+                    "message": f"Banco já populado ({existing} usuários). "
+                               "Use ?force=true para re-popular.",
+                }
+        finally:
+            db.close()
 
     try:
-        from data import seed
-        # seed.py roda o populate quando importado, mas para garantir:
-        if hasattr(seed, "main"):
-            seed.main()
-        elif hasattr(seed, "populate"):
-            seed.populate()
-        # Se o seed.py executa código no nível do módulo, o import já populou
+        # Importa e chama a função seed() do módulo data/seed.py
+        from data.seed import seed as run_seed_func
+        run_seed_func()
 
         # Confirma que populou
         db = SessionLocal()
         try:
             count = db.execute(text("SELECT COUNT(*) FROM users")).scalar()
+            prof = db.execute(text("SELECT COUNT(*) FROM professionals")).scalar()
+            svc = db.execute(text("SELECT COUNT(*) FROM services")).scalar()
+            apt = db.execute(text("SELECT COUNT(*) FROM appointments")).scalar()
         finally:
             db.close()
 
         return {
             "status": "success",
-            "message": f"Seed executado. {count} usuários no banco.",
+            "message": "Seed executado com sucesso!",
+            "counts": {
+                "users": count,
+                "professionals": prof,
+                "services": svc,
+                "appointments": apt,
+            },
+            "credenciais_demo": {
+                "admin": "paulo.lavarini@barbearia.com / admin123",
+                "profissionais": "joao/carlos/ana/pedro@barbearia.com / senha123",
+                "cliente": "demo@horacerta.com / demo123",
+            },
         }
     except Exception as e:
         logger.exception("Erro no seed")
