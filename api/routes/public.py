@@ -243,15 +243,14 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
     # Notificação — tenta Celery, se falhar faz síncrono (senha NÃO se perde)
     try:
         from tasks.reminders import notify_new_appointment
-        notify_new_appointment.delay(appointment.id, plain_password)
-        logger.info("Notificação enviada via Celery")
-    except Exception:
-        logger.info("Celery indisponível — enviando notificação síncrona")
-        try:
-            from tasks.reminders import notify_new_appointment
-            notify_new_appointment(appointment.id, plain_password)
-        except Exception as e:
-            logger.warning("Falha na notificação síncrona: %s", e)
+        logger.info(
+            "Iniciando envio de notificação para agendamento %s (cliente: %s, novo: %s)",
+            appointment.id, data.client_email, is_new_user,
+        )
+        result = notify_new_appointment(appointment.id, plain_password)
+        logger.info("Notificação concluída: %s", result)
+    except Exception as e:
+        logger.exception("Falha ao enviar notificação: %s", e)
 
     prof_name = prof.user.name if prof.user else f"Prof #{prof.id}"
 
