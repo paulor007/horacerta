@@ -27,21 +27,38 @@ export default function WhatsAppPreviewModal({
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [loadKey, setLoadKey] = useState(0);
 
+  // Dispara reload quando modal abre ou parâmetros mudam
   useEffect(() => {
     if (!isOpen || !appointmentId) return;
-
-    setLoading(true);
-    fetch(
-      `${API_BASE}/api/v1/notifications/preview/${appointmentId}?kind=${kind}`,
-    )
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        setPreview(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    setLoadKey((k) => k + 1);
   }, [isOpen, appointmentId, kind]);
+
+  // Busca o preview — padrão loadKey (sem setState direto no effect)
+  useEffect(() => {
+    if (loadKey === 0) return;
+    let cancelled = false;
+    const fetchPreview = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/v1/notifications/preview/${appointmentId}?kind=${kind}`,
+        );
+        const data = res.ok ? await res.json() : null;
+        if (!cancelled) {
+          setPreview(data);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchPreview();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadKey]);
 
   if (!isOpen) return null;
 
@@ -121,7 +138,7 @@ export default function WhatsAppPreviewModal({
           <div className="p-4">
             {/* Aviso */}
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 mb-4 flex gap-2">
-              <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+              <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
               <p className="text-blue-300 text-xs leading-relaxed">
                 <strong>Modo demo:</strong> em produção esta mensagem seria
                 enviada via WhatsApp Business API (Twilio, Evolution API). Aqui
@@ -145,7 +162,7 @@ export default function WhatsAppPreviewModal({
               </div>
 
               {/* Conversa */}
-              <div className="p-3 min-h-[200px] bg-[#0b141a]">
+              <div className="p-3 min-h-50 bg-[#0b141a]">
                 <div className="flex justify-end mb-2">
                   <div className="bg-[#005c4b] text-white text-[13px] px-3 py-2 rounded-lg max-w-[90%] whitespace-pre-line shadow leading-relaxed">
                     {renderWhatsAppText(preview.whatsapp_text)}
