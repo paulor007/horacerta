@@ -19,6 +19,7 @@ from api.routes.recurring_routes import router as recurring_router
 from api.routes.settings_route import router as system_router
 from api.routes.snapshots_route import router as snapshots_router
 from api.routes.professional_stats import router as professional_stats_router
+from api.routes.notifications_route import router as notifications_router
 from api.routes.admin_setup import router as admin_setup_router
 from websocket.routes import router as ws_router
 
@@ -66,6 +67,7 @@ app.include_router(recurring_router)
 app.include_router(system_router)
 app.include_router(snapshots_router)
 app.include_router(professional_stats_router)
+app.include_router(notifications_router)
 app.include_router(admin_setup_router)
 app.include_router(ws_router)
 
