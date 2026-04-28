@@ -10,6 +10,8 @@ import {
   Shield,
 } from "lucide-react";
 
+import WhatsAppPreviewModal from "../components/WhatsAppPreviewModal";
+
 interface Professional {
   id: number;
   user_name: string | null;
@@ -94,12 +96,15 @@ export default function PublicBooking() {
   const [clientEmail, setClientEmail] = useState("");
 
   const [bookingResult, setBookingResult] = useState<{
+    id: number;
     professional_name: string;
     service_name: string;
     date: string;
     start_time: string;
     end_time: string;
   } | null>(null);
+
+  const [showWhatsAppPreview, setShowWhatsAppPreview] = useState(false);
 
   // Carregar tudo na montagem
   useEffect(() => {
@@ -731,18 +736,35 @@ export default function PublicBooking() {
                 seus agendamentos.
               </p>
             </div>
-            <button
-              onClick={() => {
-                // Limpa sessão anterior (se existir) antes de ir pro login
-                localStorage.removeItem("horacerta_token");
-                localStorage.removeItem("horacerta_user");
-                window.location.href = "/login";
-              }}
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-8 py-3.5 rounded-xl transition"
-            >
-              <User className="w-4 h-4" /> Entrar na Minha Conta
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+              <button
+                onClick={() => setShowWhatsAppPreview(true)}
+                className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-medium px-6 py-3.5 rounded-xl transition"
+              >
+                💬 Ver mensagem WhatsApp
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.removeItem("horacerta_token");
+                  localStorage.removeItem("horacerta_user");
+                  window.location.href = "/login";
+                }}
+                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-6 py-3.5 rounded-xl transition"
+              >
+                <User className="w-4 h-4" /> Entrar na Minha Conta
+              </button>
+            </div>
           </div>
+        )}
+
+        {/* Modal Preview WhatsApp */}
+        {bookingResult && (
+          <WhatsAppPreviewModal
+            isOpen={showWhatsAppPreview}
+            onClose={() => setShowWhatsAppPreview(false)}
+            appointmentId={bookingResult.id}
+            kind="confirmation"
+          />
         )}
       </div>
     </div>
