@@ -51,6 +51,10 @@ export default function Settings({ onBack }: SettingsProps) {
 
   const [cleanupDays, setCleanupDays] = useState(90);
   const [cleanupEnabled, setCleanupEnabled] = useState(false);
+  const [maxActive, setMaxActive] = useState(1);
+  const [minDays, setMinDays] = useState(15);
+  const [cancelHours, setCancelHours] = useState(24);
+  const [policySaving, setPolicySaving] = useState(false);
   const [lastCleanup, setLastCleanup] = useState<string | null>(null);
   const [lastCount, setLastCount] = useState(0);
   const [systemMsg, setSystemMsg] = useState("");
@@ -63,6 +67,12 @@ export default function Settings({ onBack }: SettingsProps) {
           setCleanupEnabled(data.cleanup_enabled);
           setLastCleanup(data.last_cleanup_at);
           setLastCount(data.last_cleanup_count);
+          if (data.max_active_appointments !== undefined)
+            setMaxActive(data.max_active_appointments);
+          if (data.min_days_between_bookings !== undefined)
+            setMinDays(data.min_days_between_bookings);
+          if (data.client_cancel_hours !== undefined)
+            setCancelHours(data.client_cancel_hours);
         }
       });
     }
@@ -116,6 +126,42 @@ export default function Settings({ onBack }: SettingsProps) {
       cleanup_enabled: cleanupEnabled,
     });
     if (result) setSystemMsg("Configurações salvas!");
+  };
+
+  const handleSavePolicy = async () => {
+    setPolicySaving(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || "";
+      const token =
+        sessionStorage.getItem("horacerta_token") ||
+        localStorage.getItem("horacerta_token");
+
+      const res = await fetch(
+        `${API_BASE}/api/v1/system/settings/booking-policy`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            max_active_appointments: maxActive,
+            min_days_between_bookings: minDays,
+            client_cancel_hours: cancelHours,
+          }),
+        },
+      );
+
+      if (res.ok) {
+        alert("Política de agendamento atualizada com sucesso!");
+      } else {
+        alert("Erro ao salvar política. Verifique os valores.");
+      }
+    } catch {
+      alert("Erro de conexão. Tente novamente.");
+    } finally {
+      setPolicySaving(false);
+    }
   };
 
   const handleCleanupNow = async () => {
@@ -263,6 +309,87 @@ export default function Settings({ onBack }: SettingsProps) {
               className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-xl transition"
             >
               {savingPwd ? "Alterando..." : "Alterar Senha"}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Card: Política de Agendamento ── */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mt-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">
+                Política de Agendamento
+              </h2>
+              <p className="text-slate-400 text-xs">
+                Controla anti-flood e janela de cancelamento para clientes
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-slate-300 mb-1.5">
+                Máximo de agendamentos ativos por cliente
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={maxActive}
+                onChange={(e) => setMaxActive(Number(e.target.value) || 1)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
+              />
+              <p className="text-slate-500 text-xs mt-1">
+                Um cliente não pode ter mais que esse número de agendamentos
+                pendentes
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm text-slate-300 mb-1.5">
+                Dias mínimos entre agendamentos
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={365}
+                value={minDays}
+                onChange={(e) => setMinDays(Number(e.target.value) || 0)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
+              />
+              <p className="text-slate-500 text-xs mt-1">
+                Tempo mínimo entre 2 agendamentos do mesmo cliente (0 = sem
+                restrição)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm text-slate-300 mb-1.5">
+                Horas mínimas para cliente cancelar
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={168}
+                value={cancelHours}
+                onChange={(e) => setCancelHours(Number(e.target.value) || 24)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
+              />
+              <p className="text-slate-500 text-xs mt-1">
+                Cliente só pode cancelar com essa antecedência
+                (admin/profissional sempre podem)
+              </p>
+            </div>
+
+            <button
+              onClick={handleSavePolicy}
+              disabled={policySaving}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-xl transition"
+            >
+              {policySaving ? "Salvando..." : "Salvar Política"}
             </button>
           </div>
         </div>

@@ -196,6 +196,9 @@ export const getSystemSettings = () =>
     cleanup_enabled: boolean;
     last_cleanup_at: string | null;
     last_cleanup_count: number;
+    max_active_appointments?: number;
+    min_days_between_bookings?: number;
+    client_cancel_hours?: number;
   }>("/api/v1/system/settings");
 
 export const updateSystemSettings = (data: {

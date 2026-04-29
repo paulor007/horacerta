@@ -15,6 +15,8 @@ import YearlyHistory from "./pages/YearlyHistory";
 import MyStats from "./pages/MyStats";
 import PublicBooking from "./pages/PublicBooking";
 import PublicReview from "./pages/PublicReview";
+import ConfirmAppointment from "./pages/ConfirmAppointment";
+import CancelAppointment from "./pages/CancelAppointment";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -75,6 +77,8 @@ export default function App() {
         <Routes>
           <Route path="/agendar" element={<PublicBooking />} />
           <Route path="/avaliar" element={<PublicReview />} />
+          <Route path="/confirmar" element={<ConfirmAppointment />} />
+          <Route path="/cancelar" element={<CancelAppointment />} />
           <Route path="/login" element={<LoginGuard />} />
           <Route
             path="/painel"

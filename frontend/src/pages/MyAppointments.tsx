@@ -27,13 +27,22 @@ export default function MyAppointments() {
   const handleCancel = async (id: number) => {
     if (!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
 
-    const result = await cancelAppointment(id);
-    if (result) {
-      setAppointments((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, status: "cancelled" } : a)),
+    try {
+      const result = await cancelAppointment(id);
+      if (result) {
+        setAppointments((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, status: "cancelled" } : a)),
+        );
+      } else {
+        alert(
+          "Não foi possível cancelar. O prazo de cancelamento pode ter passado.\n\n" +
+            "Para casos urgentes, entre em contato com o estabelecimento.",
+        );
+      }
+    } catch {
+      alert(
+        "Erro ao cancelar. Tente novamente em alguns segundos ou entre em contato com o estabelecimento.",
       );
-    } else {
-      alert("Erro ao cancelar. Pode estar fora do prazo de 2h.");
     }
   };
 
