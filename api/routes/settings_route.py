@@ -4,7 +4,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.database import get_db
@@ -27,11 +27,20 @@ class CleanupConfig(BaseModel):
     cleanup_enabled: bool
 
 
+class BookingPolicyConfig(BaseModel):
+    max_active_appointments: int = Field(ge=1, le=10)
+    min_days_between_bookings: int = Field(ge=0, le=365)
+    client_cancel_hours: int = Field(ge=1, le=168)  # 1h a 7 dias
+
+
 class SettingsResponse(BaseModel):
     cleanup_days: int
     cleanup_enabled: bool
     last_cleanup_at: datetime | None
     last_cleanup_count: int
+    max_active_appointments: int
+    min_days_between_bookings: int
+    client_cancel_hours: int
 
     model_config = {"from_attributes": True}
 
@@ -39,10 +48,24 @@ class SettingsResponse(BaseModel):
 def _get_or_create_settings(db: Session) -> SystemSettings:
     settings = db.query(SystemSettings).first()
     if not settings:
-        settings = SystemSettings(cleanup_days=90, cleanup_enabled=False)
+        settings = SystemSettings(
+            cleanup_days=90,
+            cleanup_enabled=False,
+            max_active_appointments=1,
+            min_days_between_bookings=15,
+            client_cancel_hours=24,
+        )
         db.add(settings)
         db.commit()
         db.refresh(settings)
+    # Compatibilidade: se settings antigo não tem os novos campos, usa defaults
+    if settings.max_active_appointments is None:
+        settings.max_active_appointments = 1
+    if settings.min_days_between_bookings is None:
+        settings.min_days_between_bookings = 15
+    if settings.client_cancel_hours is None:
+        settings.client_cancel_hours = 24
+    db.commit()
     return settings
 
 
@@ -60,6 +83,7 @@ def update_settings(
     db: Session = Depends(get_db),
     admin: User = Depends(require_role("admin")),
 ):
+    """Atualiza configs de limpeza automática."""
     if data.cleanup_days not in VALID_CLEANUP_DAYS:
         raise HTTPException(
             status_code=400,
@@ -75,20 +99,37 @@ def update_settings(
     return settings
 
 
+@router.put("/settings/booking-policy", response_model=SettingsResponse)
+def update_booking_policy(
+    data: BookingPolicyConfig,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_role("admin")),
+):
+    """Atualiza política de agendamento (anti-flood, cancelamento)."""
+    settings = _get_or_create_settings(db)
+    settings.max_active_appointments = data.max_active_appointments
+    settings.min_days_between_bookings = data.min_days_between_bookings
+    settings.client_cancel_hours = data.client_cancel_hours
+    settings.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(settings)
+    logger.info(
+        "Booking policy updated: max=%d, min_days=%d, cancel_hours=%d",
+        data.max_active_appointments,
+        data.min_days_between_bookings,
+        data.client_cancel_hours,
+    )
+    return settings
+
+
 @router.post("/cleanup-now")
 def cleanup_now(
     db: Session = Depends(get_db),
     admin: User = Depends(require_role("admin")),
 ):
-    """
-    Limpa agora. ANTES, gera snapshots mensais pra preservar faturamento.
-    """
+    """Limpa agora. Antes, gera snapshots mensais pra preservar faturamento."""
     settings = _get_or_create_settings(db)
-
-    # PASSO 1: gerar snapshots mensais antes de apagar
     snapshots_created = generate_missing_snapshots(db)
-
-    # PASSO 2: apagar
     cutoff = date.today() - timedelta(days=settings.cleanup_days)
     deleted = (
         db.query(Appointment)
@@ -98,17 +139,11 @@ def cleanup_now(
         )
         .delete(synchronize_session=False)
     )
-
     settings.last_cleanup_at = datetime.now(timezone.utc)
     settings.last_cleanup_count = deleted
     db.commit()
-
-    logger.info("Manual cleanup: %d appointments deleted, %d snapshots preserved",
-                deleted, len(snapshots_created))
     return {
-        "message": f"{deleted} agendamentos antigos removidos. Faturamento preservado em {len(snapshots_created)} snapshots mensais.",
+        "message": f"{deleted} agendamentos antigos removidos. Faturamento preservado em {len(snapshots_created)} snapshots.",
         "deleted": deleted,
         "snapshots_created": len(snapshots_created),
-        "cutoff_date": cutoff.isoformat(),
-        "cleanup_days": settings.cleanup_days,
     }

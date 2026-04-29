@@ -32,6 +32,7 @@ from schemas.appointment import (
     TimeSlot,
 )
 from services.availability import get_available_slots, check_conflict
+from services.booking_policy import validate_can_book, validate_can_cancel
 from websocket.manager import ws_manager
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,8 @@ def create_appointment(
     - Sem conflito com outro agendamento
     - Não permite agendar no passado
     """
+
+
     # Validar profissional
     prof = db.query(Professional).filter(
         Professional.id == data.professional_id,
@@ -164,6 +167,12 @@ def create_appointment(
     # Verificar conflito
     if check_conflict(db, data.professional_id, data.date, data.start_time, end_time):
         raise HTTPException(status_code=409, detail="Horário já ocupado")
+
+    # Anti-flood (apenas se o cliente for o que está agendando)
+    if user.role == "client":
+        can_book, error_msg = validate_can_book(db, user.id, data.date)
+        if not can_book:
+            raise HTTPException(status_code=400, detail=error_msg)
 
     # Criar agendamento
     appointment = Appointment(
@@ -217,22 +226,16 @@ def cancel_appointment(
         raise HTTPException(status_code=404, detail="Agendamento não encontrado")
 
     if user.role == "client" and apt.client_id != user.id:
-        raise HTTPException(status_code=403, detail="Só pode cancelar seus próprios agendamentos")
+            raise HTTPException(status_code=403, detail="Só pode cancelar seus próprios agendamentos")
 
-    if apt.status not in ("scheduled", "confirmed"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Agendamento com status '{apt.status}' não pode ser cancelado",
-        )
+    # Validação de janela de cancelamento (usa settings configurável)
+    is_client = user.role == "client"
+    can_cancel, error_msg = validate_can_cancel(db, apt, is_client=is_client)
+    if not can_cancel:
+        raise HTTPException(status_code=400, detail=error_msg)
 
-    # Política de 2h (apenas para clientes)
-    if user.role == "client":
-        apt_datetime = datetime.combine(apt.date, apt.start_time)
-        if datetime.now() > apt_datetime - timedelta(hours=2):
-            raise HTTPException(status_code=400, detail="Cancelamento permitido até 2h antes do horário")
-
-    apt.status = "cancelled"
-    db.commit()
+        apt.status = "cancelled"
+        db.commit()
 
     # Notificar lista de espera que vaga abriu
     try:

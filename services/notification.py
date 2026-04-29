@@ -93,22 +93,54 @@ def register_notification(appointment_id: int, notification_type: str, channel: 
 
 
 def build_reminder_message(client_name: str, service_name: str, professional_name: str,
-                           date_str: str, time_str: str) -> dict:
-    """Monta mensagens de lembrete para email e WhatsApp."""
+                           date_str: str, time_str: str,
+                           confirm_link: str | None = None,
+                           cancel_link: str | None = None) -> dict:
+    """Monta mensagens de lembrete para email e WhatsApp.
+
+    Se confirm_link e cancel_link forem fornecidos, inclui botões de ação no email.
+    """
+    # Botões HTML (apenas se links fornecidos)
+    action_buttons_email = ""
+    action_text_whatsapp = ""
+
+    if confirm_link and cancel_link:
+        action_buttons_email = f"""
+        <div style="text-align: center; margin: 24px 0;">
+            <a href="{confirm_link}" style="display: inline-block; background: #22c55e; color: white;
+                text-decoration: none; padding: 12px 24px; border-radius: 8px; margin: 4px 8px;
+                font-weight: bold;">
+                ✅ CONFIRMAR PRESENÇA
+            </a>
+            <a href="{cancel_link}" style="display: inline-block; background: #ef4444; color: white;
+                text-decoration: none; padding: 12px 24px; border-radius: 8px; margin: 4px 8px;
+                font-weight: bold;">
+                ❌ PRECISO CANCELAR
+            </a>
+        </div>
+        <p style="color: #64748b; font-size: 13px; text-align: center;">
+            Confirme sua presença para garantir o horário.
+            Se não puder ir, cancele para liberarmos o horário para outro cliente.
+        </p>
+        """
+        action_text_whatsapp = (
+            f"\n*Confirme ou cancele:*\n"
+            f"✅ Confirmar: {confirm_link}\n"
+            f"❌ Cancelar: {cancel_link}\n"
+        )
+
     email_body = f"""
     <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
         <h2 style="color: #2563eb;">🕐 Lembrete — {settings.EMPRESA_NOME}</h2>
         <p>Olá <strong>{client_name}</strong>,</p>
-        <p>Lembrete do seu agendamento:</p>
+        <p>Lembrete do seu agendamento amanhã:</p>
         <div style="background: #f1f5f9; border-radius: 12px; padding: 16px; margin: 16px 0;">
             <p style="margin: 4px 0;">📋 <strong>Serviço:</strong> {service_name}</p>
             <p style="margin: 4px 0;">👤 <strong>Profissional:</strong> {professional_name}</p>
             <p style="margin: 4px 0;">📅 <strong>Data:</strong> {date_str}</p>
             <p style="margin: 4px 0;">⏰ <strong>Horário:</strong> {time_str}</p>
         </div>
-        <p style="color: #64748b; font-size: 14px;">
-            Caso precise cancelar, faça com até 2 horas de antecedência.
-        </p>
+        {action_buttons_email}
         <p style="color: #94a3b8; font-size: 12px;">{settings.EMPRESA_NOME} — HoraCerta</p>
     </div>
     """
@@ -116,12 +148,12 @@ def build_reminder_message(client_name: str, service_name: str, professional_nam
     whatsapp_msg = (
         f"🕐 *Lembrete — {settings.EMPRESA_NOME}*\n\n"
         f"Olá {client_name}!\n\n"
-        f"Lembrete do seu agendamento:\n"
+        f"Lembrete do seu agendamento amanhã:\n"
         f"📋 *Serviço:* {service_name}\n"
         f"👤 *Profissional:* {professional_name}\n"
         f"📅 *Data:* {date_str}\n"
-        f"⏰ *Horário:* {time_str}\n\n"
-        f"Caso precise cancelar, faça com até 2h de antecedência.\n\n"
+        f"⏰ *Horário:* {time_str}\n"
+        f"{action_text_whatsapp}\n"
         f"_{settings.EMPRESA_NOME} — HoraCerta_"
     )
 

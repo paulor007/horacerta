@@ -1,7 +1,7 @@
 """
 Endpoints de notificações:
-- GET /preview/{appointment_id} → retorna a mensagem WhatsApp que SERIA enviada (público, leve)
-- GET/POST /cron/check-reminders → endpoint chamado pelo cron-job.org pra enviar lembretes 24h
+- GET /preview/{appointment_id} → mensagem WhatsApp que SERIA enviada
+- GET/POST /cron/check-reminders → cron-job.org dispara lembretes 24h com botões
 - GET /cron/ping → healthcheck público
 """
 
@@ -12,6 +12,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy.orm import joinedload
 
+from core.config import settings
 from core.database import SessionLocal
 from models.appointment import Appointment
 from models.notification import Notification
@@ -22,6 +23,7 @@ from services.notification import (
     send_email,
     register_notification,
 )
+from api.routes.public_actions import generate_action_token
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +37,8 @@ router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
 @router.get("/preview/{appointment_id}")
 def preview_message(appointment_id: int, kind: str = Query("confirmation")):
     """
-    Retorna o texto da mensagem WhatsApp que SERIA enviada para um agendamento.
-
-    Usado pelo modal "Preview WhatsApp" do frontend pra mostrar visualmente
-    a mensagem sem realmente enviar. Não requer autenticação porque a mensagem
-    é gerada a partir de dados públicos do agendamento.
-
-    Tipos suportados:
-    - confirmation (default): confirmação para o cliente
-    - reminder: lembrete 24h antes
-    - new_booking: notificação para o profissional
+    Retorna o texto da mensagem WhatsApp que SERIA enviada.
+    Usado pelo modal "Preview WhatsApp" do frontend.
     """
     db = SessionLocal()
     try:
@@ -78,7 +72,13 @@ def preview_message(appointment_id: int, kind: str = Query("confirmation")):
         time_str = apt.start_time.strftime("%H:%M")
 
         if kind == "reminder":
-            msg = build_reminder_message(client_name, service_name, prof_name, date_str, time_str)
+            # Para preview, gera links fictícios (mostra como ficaria)
+            confirm_link = f"{settings.FRONTEND_URL}/confirmar?token=DEMO_TOKEN"
+            cancel_link = f"{settings.FRONTEND_URL}/cancelar?token=DEMO_TOKEN"
+            msg = build_reminder_message(
+                client_name, service_name, prof_name, date_str, time_str,
+                confirm_link=confirm_link, cancel_link=cancel_link,
+            )
             return {
                 "kind": "reminder",
                 "title": "Lembrete de agendamento",
@@ -119,13 +119,7 @@ def preview_message(appointment_id: int, kind: str = Query("confirmation")):
 def check_reminders(token: str = Query(...)):
     """
     Endpoint chamado pelo cron-job.org a cada hora.
-
-    Busca agendamentos que:
-    - Acontecem nas próximas 23-25 horas
-    - Ainda não tiveram lembrete enviado
-    - Status = "scheduled"
-
-    Envia email de lembrete pra cada um.
+    Envia lembretes pra agendamentos das próximas 23-25h com BOTÕES de confirmar/cancelar.
     """
     expected = os.getenv("CRON_TOKEN")
     if not expected:
@@ -151,7 +145,7 @@ def check_reminders(token: str = Query(...)):
                 joinedload(Appointment.professional),
             )
             .filter(
-                Appointment.status == "scheduled",
+                Appointment.status.in_(["scheduled", "confirmed"]),
                 Appointment.date >= target_min.date(),
                 Appointment.date <= target_max.date(),
             )
@@ -190,13 +184,23 @@ def check_reminders(token: str = Query(...)):
             date_str = apt.date.strftime("%d/%m/%Y")
             time_str = apt.start_time.strftime("%H:%M")
 
-            msg = build_reminder_message(client_name, service_name, prof_name, date_str, time_str)
+            # Gera tokens de ação (válidos por 48h pra cobrir o lembrete)
+            confirm_token = generate_action_token(apt.id, "confirm", hours_valid=48)
+            cancel_token = generate_action_token(apt.id, "cancel", hours_valid=48)
+
+            confirm_link = f"{settings.FRONTEND_URL}/confirmar?token={confirm_token}"
+            cancel_link = f"{settings.FRONTEND_URL}/cancelar?token={cancel_token}"
+
+            msg = build_reminder_message(
+                client_name, service_name, prof_name, date_str, time_str,
+                confirm_link=confirm_link, cancel_link=cancel_link,
+            )
 
             ok = False
             if client_email:
                 ok = send_email(
                     client_email,
-                    f"Lembrete do seu agendamento — {date_str} às {time_str}",
+                    f"Lembrete: agendamento amanhã às {time_str} — {settings.EMPRESA_NOME}",
                     msg["email"],
                 )
 
@@ -224,13 +228,9 @@ def check_reminders(token: str = Query(...)):
         db.close()
 
 
-# ─────────────────────────────────────────────────────────────
-# Healthcheck público pro cron-job.org
-# ─────────────────────────────────────────────────────────────
-
 @router.get("/cron/ping")
 def cron_ping():
-    """Endpoint público para verificar se o serviço está vivo."""
+    """Healthcheck público pro cron-job.org."""
     return {
         "status": "ok",
         "service": "horacerta-cron",

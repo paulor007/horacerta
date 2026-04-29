@@ -28,6 +28,7 @@ from schemas.appointment import AvailabilityResponse, TimeSlot
 from schemas.professional import ProfessionalResponse
 from schemas.service import ServiceResponse
 from services.availability import get_available_slots, check_conflict
+from services.booking_policy import validate_can_book
 try:
     from services.rate_limit import check_rate_limit, check_booking_rate_limit
 except ImportError:
@@ -190,6 +191,13 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
     else:
         user.name = data.client_name
         user.phone = data.client_phone
+
+    # Valida política de agendamento ──
+    # (Só valida se o user já existir, ou seja, cliente recorrente)
+    if not is_new_user:
+        can_book, error_msg = validate_can_book(db, user.id, data.date)
+        if not can_book:
+            raise HTTPException(status_code=400, detail=error_msg)
 
     # Validar profissional
     prof = db.query(Professional).filter(
