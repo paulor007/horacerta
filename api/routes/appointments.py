@@ -18,6 +18,7 @@ from datetime import date as date_type
 from datetime import time as time_type
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
+from models.system_settings import SystemSettings
 
 from api.deps import get_db, get_current_user, require_role
 from models.user import User
@@ -123,7 +124,59 @@ def create_appointment(
     - Sem conflito com outro agendamento
     - Não permite agendar no passado
     """
+    # ── Validar política de agendamento (apenas pra clientes) ──
+    if user.role == "client":
+        settings_row = db.query(SystemSettings).first()
+        max_active = 1
+        min_days = 15
+        if settings_row:
+            max_active = settings_row.max_active_appointments or 1
+            min_days = settings_row.min_days_between_bookings or 15
 
+        # Conta ativos (futuros, não cancelados)
+        from datetime import date as date_type
+        today = date_type.today()
+        active_count = (
+            db.query(Appointment)
+            .filter(
+                Appointment.client_id == user.id,
+                Appointment.date >= today,
+                Appointment.status.in_(["scheduled", "confirmed"]),
+            )
+            .count()
+        )
+        if active_count >= max_active:
+            if max_active == 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Você já tem um agendamento ativo. "
+                           "Para agendar outro, conclua ou cancele o atual.",
+                )
+            raise HTTPException(
+                status_code=400,
+                detail=f"Limite de {max_active} agendamentos ativos atingido.",
+            )
+
+        # Verifica intervalo mínimo desde último agendamento
+        if min_days > 0:
+            last_apt = (
+                db.query(Appointment)
+                .filter(
+                    Appointment.client_id == user.id,
+                    Appointment.status.in_(["scheduled", "confirmed", "completed"]),
+                )
+                .order_by(Appointment.date.desc())
+                .first()
+            )
+            if last_apt:
+                from datetime import timedelta as td
+                min_next = last_apt.date + td(days=min_days)
+                if data.date < min_next:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Intervalo mínimo de {min_days} dias entre agendamentos. "
+                               f"Próxima data permitida: {min_next.strftime('%d/%m/%Y')}.",
+                    )
 
     # Validar profissional
     prof = db.query(Professional).filter(
@@ -525,3 +578,38 @@ def get_agenda(
         }
         for a in apts
     ]
+
+# ── Limpar histórico (cliente) ──
+
+@router.post("/my/clean-history")
+def clean_my_history(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Cliente limpa próprio histórico de agendamentos.
+    Apaga apenas: completed, cancelled, no_show.
+    NÃO apaga: scheduled, confirmed (ativos).
+    """
+    if user.role != "client":
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas clientes podem limpar próprio histórico.",
+        )
+
+    deleted = (
+        db.query(Appointment)
+        .filter(
+            Appointment.client_id == user.id,
+            Appointment.status.in_(["completed", "cancelled", "no_show"]),
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+
+    logger.info("Cliente %s limpou histórico: %d agendamentos removidos", user.id, deleted)
+
+    return {
+        "deleted": deleted,
+        "message": f"{deleted} agendamentos removidos do histórico.",
+    }
