@@ -6,7 +6,7 @@ import {
   getProfessionals,
   getServices,
   getAvailability,
-  createAppointment,
+  createAppointmentWithError,
 } from "../api/endpoints";
 import type { Professional, Service, TimeSlot } from "../types";
 
@@ -87,7 +87,7 @@ export default function BookAppointment() {
     const timeFormatted =
       selectedTime.length === 5 ? selectedTime + ":00" : selectedTime;
 
-    const result = await createAppointment({
+    const result = await createAppointmentWithError({
       professional_id: selectedProf.id,
       service_id: selectedService.id,
       date: selectedDate,
@@ -96,10 +96,11 @@ export default function BookAppointment() {
 
     setSubmitting(false);
 
-    if (result) {
+    if (result.ok) {
       setStep("success");
     } else {
-      setError("Erro ao agendar. Horário pode já estar ocupado.");
+      // Mostra mensagem real do backend
+      setError(result.error || "Não foi possível agendar. Tente novamente.");
     }
   };
 

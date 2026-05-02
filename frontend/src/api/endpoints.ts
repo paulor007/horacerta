@@ -273,3 +273,25 @@ export const getProfessionalStats = (
     `/api/v1/reports/professional-stats${suffix}`,
   );
 };
+
+export const cancelAppointmentWithError = (id: number) =>
+  api.delWithError<{ message: string }>(`/api/v1/appointments/${id}`);
+
+export const createAppointmentWithError = (data: {
+  professional_id: number;
+  service_id: number;
+  date: string;
+  start_time: string;
+}) => api.postWithError<Appointment>("/api/v1/appointments", data);
+
+export const cleanMyHistory = () =>
+  api.postWithError<{ deleted: number; message: string }>(
+    "/api/v1/appointments/my/clean-history",
+  );
+
+export const getBookingPolicy = () =>
+  api.getWithError<{
+    max_active_appointments: number;
+    min_days_between_bookings: number;
+    client_cancel_hours: number;
+  }>("/api/v1/system/booking-policy");

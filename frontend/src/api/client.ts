@@ -2,8 +2,10 @@
  * Cliente HTTP do frontend.
  *
  * Em DEV: VITE_API_URL é vazio -> usa proxy do Vite (vite.config.ts)
- * Em PROD: VITE_API_URL é a URL completa do backend Railway
- *          ex: https://horacerta-backend.up.railway.app
+ * Em PROD: VITE_API_URL é a URL completa do backend Render
+ *
+ * NOVO: agora os métodos retornam um objeto { ok, data, error } em vez de null.
+ * Isso permite mostrar mensagens de erro reais do backend.
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -12,6 +14,13 @@ const STORAGE_KEY_TOKEN = "horacerta_token";
 const STORAGE_KEY_USER = "horacerta_user";
 const STORAGE_KEY_ACTIVITY = "horacerta_last_activity";
 const STORAGE_KEY_REMEMBER = "horacerta_remember";
+
+export interface ApiResult<T> {
+  ok: boolean;
+  data: T | null;
+  error: string | null;
+  status: number;
+}
 
 class ApiClient {
   private token: string | null = null;
@@ -65,18 +74,72 @@ class ApiClient {
     }
   }
 
-  async get<T>(endpoint: string): Promise<T | null> {
+  // ── Helpers internos ──
+
+  /**
+   * Extrai mensagem de erro do response.
+   * FastAPI retorna: { "detail": "mensagem" } ou { "detail": [...] }
+   */
+  private async extractError(res: Response): Promise<string> {
     try {
-      const res = await fetch(this.url(endpoint), { headers: this.headers() });
-      this.handleUnauthorized(res);
-      if (!res.ok) return null;
-      return await res.json();
+      const data = await res.json();
+      if (typeof data.detail === "string") return data.detail;
+      if (Array.isArray(data.detail) && data.detail[0]?.msg) {
+        return data.detail[0].msg;
+      }
+      return `Erro ${res.status}`;
     } catch {
-      return null;
+      return `Erro ${res.status}`;
     }
   }
 
+  // ── Métodos LEGACY (retornam null em erro, mantidos pra compat) ──
+
+  async get<T>(endpoint: string): Promise<T | null> {
+    const r = await this.getWithError<T>(endpoint);
+    return r.data;
+  }
+
   async post<T>(endpoint: string, body?: unknown): Promise<T | null> {
+    const r = await this.postWithError<T>(endpoint, body);
+    return r.data;
+  }
+
+  async put<T>(endpoint: string, body?: unknown): Promise<T | null> {
+    const r = await this.putWithError<T>(endpoint, body);
+    return r.data;
+  }
+
+  async del<T>(endpoint: string): Promise<T | null> {
+    const r = await this.delWithError<T>(endpoint);
+    return r.data;
+  }
+
+  // ── Métodos NOVOS (retornam ApiResult com erro detalhado) ──
+
+  async getWithError<T>(endpoint: string): Promise<ApiResult<T>> {
+    try {
+      const res = await fetch(this.url(endpoint), { headers: this.headers() });
+      this.handleUnauthorized(res);
+      if (!res.ok) {
+        return {
+          ok: false,
+          data: null,
+          error: await this.extractError(res),
+          status: res.status,
+        };
+      }
+      const data = await res.json();
+      return { ok: true, data, error: null, status: res.status };
+    } catch {
+      return { ok: false, data: null, error: "Erro de conexão", status: 0 };
+    }
+  }
+
+  async postWithError<T>(
+    endpoint: string,
+    body?: unknown,
+  ): Promise<ApiResult<T>> {
     try {
       const res = await fetch(this.url(endpoint), {
         method: "POST",
@@ -84,14 +147,25 @@ class ApiClient {
         body: body ? JSON.stringify(body) : undefined,
       });
       this.handleUnauthorized(res);
-      if (!res.ok) return null;
-      return await res.json();
+      if (!res.ok) {
+        return {
+          ok: false,
+          data: null,
+          error: await this.extractError(res),
+          status: res.status,
+        };
+      }
+      const data = await res.json();
+      return { ok: true, data, error: null, status: res.status };
     } catch {
-      return null;
+      return { ok: false, data: null, error: "Erro de conexão", status: 0 };
     }
   }
 
-  async put<T>(endpoint: string, body?: unknown): Promise<T | null> {
+  async putWithError<T>(
+    endpoint: string,
+    body?: unknown,
+  ): Promise<ApiResult<T>> {
     try {
       const res = await fetch(this.url(endpoint), {
         method: "PUT",
@@ -99,26 +173,44 @@ class ApiClient {
         body: body ? JSON.stringify(body) : undefined,
       });
       this.handleUnauthorized(res);
-      if (!res.ok) return null;
-      return await res.json();
+      if (!res.ok) {
+        return {
+          ok: false,
+          data: null,
+          error: await this.extractError(res),
+          status: res.status,
+        };
+      }
+      const data = await res.json();
+      return { ok: true, data, error: null, status: res.status };
     } catch {
-      return null;
+      return { ok: false, data: null, error: "Erro de conexão", status: 0 };
     }
   }
 
-  async del<T>(endpoint: string): Promise<T | null> {
+  async delWithError<T>(endpoint: string): Promise<ApiResult<T>> {
     try {
       const res = await fetch(this.url(endpoint), {
         method: "DELETE",
         headers: this.headers(),
       });
       this.handleUnauthorized(res);
-      if (!res.ok) return null;
-      return await res.json();
+      if (!res.ok) {
+        return {
+          ok: false,
+          data: null,
+          error: await this.extractError(res),
+          status: res.status,
+        };
+      }
+      const data = await res.json();
+      return { ok: true, data, error: null, status: res.status };
     } catch {
-      return null;
+      return { ok: false, data: null, error: "Erro de conexão", status: 0 };
     }
   }
+
+  // ── Login ──
 
   async loginRequest(
     email: string,
@@ -137,7 +229,6 @@ class ApiClient {
     }
   }
 
-  /** URL pública absoluta (para WebSocket, downloads, imagens, etc) */
   getApiBaseUrl(): string {
     return API_BASE;
   }
