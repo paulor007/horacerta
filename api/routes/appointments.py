@@ -75,7 +75,13 @@ def get_availability(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Horários disponíveis para um profissional em uma data."""
+    """Horários disponíveis para um profissional em uma data.
+
+    Para cada slot ocupado, retorna info adicional:
+    - Se admin/profissional: nome do cliente (ex: "Carlos Silva")
+    - Se cliente comum: marca slots PRÓPRIOS como 'mine' (vermelho "Você já tem")
+    - Slots ocupados por outros: 'busy' sem nome (privacidade)
+    """
     try:
         target_date = date_type.fromisoformat(date)
     except ValueError:
@@ -92,10 +98,47 @@ def get_availability(
 
     raw_slots = get_available_slots(db, professional_id, target_date, service_id)
 
+    # Busca agendamentos do dia (para mostrar info nos slots ocupados)
+    day_appointments = (
+        db.query(Appointment)
+        .options(joinedload(Appointment.client))
+        .filter(
+            Appointment.professional_id == professional_id,
+            Appointment.date == target_date,
+            Appointment.status.in_(["scheduled", "confirmed"]),
+        )
+        .all()
+    )
+
+    # Mapa: "HH:MM" -> Appointment
+    apt_by_time = {a.start_time.strftime("%H:%M"): a for a in day_appointments}
+
+    is_staff = user.role in ("admin", "professional")
+
     slots = []
     for s in raw_slots:
         h, m = map(int, s["time"].split(":"))
-        slots.append(TimeSlot(time=time_type(h, m), available=s["available"]))
+        slot = TimeSlot(time=time_type(h, m), available=s["available"])
+
+        # Adiciona info de quem ocupou o slot (se ocupado)
+        if not s["available"]:
+            time_key = s["time"]
+            apt = apt_by_time.get(time_key)
+            if apt:
+                if is_staff:
+                    # Admin/profissional vê o nome do cliente
+                    slot.client_name = apt.client.name if apt.client else "Cliente"
+                    slot.reason = "busy"
+                elif apt.client_id == user.id:
+                    # É o próprio cliente
+                    slot.reason = "mine"
+                else:
+                    # Outro cliente — privacidade: não mostra nome
+                    slot.reason = "busy"
+            else:
+                slot.reason = "busy"
+
+        slots.append(slot)
 
     return AvailabilityResponse(
         professional_id=professional_id,
@@ -273,13 +316,13 @@ def cancel_appointment(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Cancelar agendamento (cliente até 2h antes; admin/profissional qualquer hora)."""
+    """Cancelar agendamento (janela configurável pelo settings)."""
     apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not apt:
         raise HTTPException(status_code=404, detail="Agendamento não encontrado")
 
     if user.role == "client" and apt.client_id != user.id:
-            raise HTTPException(status_code=403, detail="Só pode cancelar seus próprios agendamentos")
+        raise HTTPException(status_code=403, detail="Só pode cancelar seus próprios agendamentos")
 
     # Validação de janela de cancelamento (usa settings configurável)
     is_client = user.role == "client"
@@ -287,19 +330,28 @@ def cancel_appointment(
     if not can_cancel:
         raise HTTPException(status_code=400, detail=error_msg)
 
-        apt.status = "cancelled"
-        db.commit()
+    apt.status = "cancelled"
+    db.commit()
+    db.refresh(apt)
 
-    # Notificar lista de espera que vaga abriu
+    logger.info(
+        "Cancelado agendamento id=%s status=%s by user_id=%s",
+        appointment_id, apt.status, user.id,
+    )
+
+    # Notificar lista de espera (pode falhar sem afetar o cancelamento)
     try:
         from api.routes.waitlist_routes import notify_waitlist_on_cancel
         notify_waitlist_on_cancel(db, apt.professional_id, apt.date)
-    except Exception:
-        logger.debug("Waitlist notification failed — continuing")
+    except Exception as e:
+        logger.warning("Waitlist notification failed: %s", e)
 
-    _broadcast_safe(ws_manager.broadcast_appointment_event(
-        "cancelled", apt.professional_id, {"id": appointment_id},
-    ))
+    try:
+        _broadcast_safe(ws_manager.broadcast_appointment_event(
+            "cancelled", apt.professional_id, {"id": appointment_id},
+        ))
+    except Exception:
+        pass
 
     return {"message": "Agendamento cancelado", "id": appointment_id}
 

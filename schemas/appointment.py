@@ -33,13 +33,28 @@ class AppointmentResponse(BaseModel):
     professional_name: str | None = None
     service_name: str | None = None
     service_price: Decimal | None = None
-    service_duration: int | None = None 
+    service_duration: int | None = None
 
     model_config = {"from_attributes": True}
 
+
 class TimeSlot(BaseModel):
+    """
+    Slot de horário com informação de privacidade.
+
+    Campo `reason` indica por que o slot está indisponível:
+    - None: slot livre (available=True)
+    - "busy": slot ocupado por outro cliente (cliente vê só "OCUPADO")
+    - "mine": slot ocupado pelo cliente logado (mostra "VOCÊ JÁ TEM")
+
+    Campo `client_name` só vem preenchido quando user é admin/profissional.
+    Cliente comum nunca vê nome de outros clientes.
+    """
     time: time
     available: bool
+    reason: str | None = None
+    client_name: str | None = None
+
 
 class AvailabilityResponse(BaseModel):
     professional_id: int

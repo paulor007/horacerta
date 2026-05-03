@@ -48,6 +48,12 @@ export interface Appointment {
 export interface TimeSlot {
   time: string;
   available: boolean;
+  // Se não disponível, indica por quê (vem do backend):
+  // - "busy": ocupado por outro cliente (privacidade — cliente vê só "OCUPADO")
+  // - "mine": ocupado pelo cliente logado (mostra "VOCÊ JÁ TEM")
+  reason?: string | null;
+  // Só preenchido para admin/profissional logado (mostra "Carlos - 09:00")
+  client_name?: string | null;
 }
 
 export interface AvailabilityResponse {
