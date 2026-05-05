@@ -111,8 +111,9 @@ def public_professionals(request: Request, db: Session = Depends(get_db)):
     for p in profs:
         data = ProfessionalResponse.model_validate(p)
         data.user_name = p.user.name if p.user else None
+        data.user_avatar = p.user.avatar_url if p.user else None
         result.append(data)
-    return result
+    return result   
 
 
 @router.get("/services", response_model=list[ServiceResponse])

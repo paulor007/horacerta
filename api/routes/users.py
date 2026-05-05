@@ -3,10 +3,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from api.deps import get_db, require_role
+from api.deps import get_db, get_current_user, require_role
 from core.security import hash_password
 from models.user import User
-from schemas.auth import RegisterRequest, UserResponse
+from schemas.auth import (
+    RegisterRequest,
+    UserResponse,
+    AvatarUpdate,
+    ProfileUpdate,
+)
 
 router = APIRouter(prefix="/api/v1/users", tags=["Usuários (Admin)"])
 
@@ -65,3 +70,51 @@ def toggle_active(
     db.commit()
     status = "ativado" if user.is_active else "desativado"
     return {"message": f"Usuário {user.name} {status}"}
+
+@router.get("/me", response_model=UserResponse)
+def get_my_profile(
+    user: User = Depends(get_current_user),
+):
+    """Retorna dados do usuário logado (incluindo avatar_url)."""
+    return user
+
+
+@router.put("/me", response_model=UserResponse)
+def update_my_profile(
+    data: ProfileUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Usuário atualiza próprio nome/phone."""
+    if data.name is not None:
+        user.name = data.name
+    if data.phone is not None:
+        user.phone = data.phone
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.put("/me/avatar", response_model=UserResponse)
+def update_my_avatar(
+    data: AvatarUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Atualiza avatar do próprio usuário (URL do Cloudinary)."""
+    user.avatar_url = data.avatar_url
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/me/avatar", response_model=UserResponse)
+def remove_my_avatar(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Remove avatar do próprio usuário (volta a mostrar iniciais)."""
+    user.avatar_url = None
+    db.commit()
+    db.refresh(user)
+    return user

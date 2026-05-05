@@ -3,6 +3,7 @@
 from pydantic import BaseModel
 from datetime import time
 
+
 class ProfessionalCreate(BaseModel):
     """Schema para criação de profissional."""
     user_id: int
@@ -34,6 +35,6 @@ class ProfessionalResponse(BaseModel):
     work_end: time
     work_days: str
     user_name: str | None = None
+    user_avatar: str | None = None
 
     model_config = {"from_attributes": True}
-

@@ -62,6 +62,7 @@ def login(
         access_token=token,
         name=user.name,
         role=user.role,
+        avatar_url=user.avatar_url,
     )
 
 
