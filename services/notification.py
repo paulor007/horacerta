@@ -305,3 +305,44 @@ def build_review_request_message(client_name: str, professional_name: str,
     )
 
     return {"email": email_body, "whatsapp": whatsapp_msg}
+
+
+def build_password_reset_message(client_name: str, new_password: str) -> dict:
+    """Monta mensagem de recuperação de senha (forgot-password)."""
+    email_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">🔑 Sua nova senha — {settings.EMPRESA_NOME}</h2>
+        <p>Olá <strong>{client_name}</strong>,</p>
+        <p>Você solicitou uma nova senha de acesso ao sistema.</p>
+        <p>Aqui está sua <strong>nova senha</strong>:</p>
+        <div style="background: #fef3c7; border: 2px solid #fbbf24; border-radius: 12px; padding: 24px; margin: 16px 0; text-align: center;">
+            <p style="margin: 0 0 8px; font-weight: bold; color: #92400e; font-size: 13px;">🔒 NOVA SENHA</p>
+            <p style="margin: 0; font-size: 28px; font-weight: bold; color: #78350f; letter-spacing: 3px; font-family: 'Courier New', monospace;">
+                {new_password}
+            </p>
+        </div>
+        <div style="background: #f1f5f9; border-radius: 12px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 0 0 8px; font-weight: bold; color: #475569;">💡 Próximos passos:</p>
+            <ol style="margin: 0; padding-left: 20px; color: #64748b;">
+                <li style="margin-bottom: 4px;">Acesse o sistema e faça login com essa senha</li>
+                <li style="margin-bottom: 4px;">Vá em "Meu Perfil" e altere para uma senha pessoal</li>
+                <li>Pronto, sua conta está segura novamente</li>
+            </ol>
+        </div>
+        <p style="color: #64748b; font-size: 13px;">
+            Se você não solicitou essa recuperação, ignore este email. Sua senha anterior continuará válida apenas se ninguém tiver acesso a este email.
+        </p>
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">{settings.EMPRESA_NOME} — HoraCerta</p>
+    </div>
+    """
+
+    whatsapp_msg = (
+        f"🔑 *Nova senha — {settings.EMPRESA_NOME}*\n\n"
+        f"Olá {client_name}!\n\n"
+        f"Você solicitou recuperação de senha.\n\n"
+        f"🔒 *Sua nova senha:* `{new_password}`\n\n"
+        f"_Recomendamos alterar para uma senha pessoal nas configurações._\n\n"
+        f"_{settings.EMPRESA_NOME} — HoraCerta_"
+    )
+
+    return {"email": email_body, "whatsapp": whatsapp_msg}

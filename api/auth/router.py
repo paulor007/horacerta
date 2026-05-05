@@ -1,6 +1,9 @@
-"""Endpoints de autenticação: register, login, change password, update profile."""
+"""Endpoints de autenticação: register, login, change password, update profile, forgot password."""
 
-from fastapi import APIRouter, Depends, HTTPException
+import secrets
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -10,6 +13,20 @@ from core.security import create_access_token, verify_password, hash_password
 from api.deps import get_current_user
 from models.user import User
 from schemas.auth import RegisterRequest, LoginResponse, UserResponse
+from services.rate_limit import check_rate_limit
+from services.notification import (
+    send_email,
+    send_whatsapp,
+    build_password_reset_message,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _generate_password(length: int = 8) -> str:
+    """Gera senha aleatória do tipo 'hc-Ab3cD9'."""
+    chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "hc-" + "".join(secrets.choice(chars) for _ in range(length))
 
 router = APIRouter(prefix="/auth", tags=["Autenticação"])
 
@@ -22,6 +39,9 @@ class UpdateProfileRequest(BaseModel):
     name: str | None = None
     phone: str | None = None
     email: EmailStr | None = None
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
@@ -110,3 +130,49 @@ def update_profile(
     db.commit()
     db.refresh(user)
     return user
+
+@router.post("/forgot-password")
+def forgot_password(
+    data: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Recuperação de senha — envia nova senha por email/WhatsApp.
+
+    Por segurança, sempre retorna 200 (não revela se o email existe no sistema).
+    Rate limit: 60 tentativas por minuto por IP.
+    """
+    check_rate_limit(request)
+
+    success_msg = {
+        "message": "Se o email estiver cadastrado, você receberá uma nova senha em instantes."
+    }
+
+    user = db.query(User).filter(User.email == data.email).first()
+
+    if not user or not user.is_active:
+        # Não revela que o email não existe (segurança contra enumeration)
+        logger.info("Forgot-password: email não cadastrado: %s", data.email)
+        return success_msg
+
+    # Gera nova senha e atualiza no banco
+    new_password = _generate_password()
+    user.hashed_password = hash_password(new_password)
+    db.commit()
+
+    logger.info("Forgot-password: senha resetada para %s", data.email)
+
+    # Envia notificações
+    try:
+        msgs = build_password_reset_message(
+            client_name=user.name,
+            new_password=new_password,
+        )
+        send_email(user.email, "Sua nova senha — HoraCerta", msgs["email"])
+
+        if user.phone:
+            send_whatsapp(user.phone, msgs["whatsapp"])
+    except Exception as e:
+        logger.exception("Erro ao enviar email de recuperação: %s", e)
+
+    return success_msg
