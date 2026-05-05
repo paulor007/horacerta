@@ -72,6 +72,42 @@ async function apiFetch<T>(
   }
 }
 
+/**
+ * Mensagem de erro.
+ * Retorna { ok, data, error } para mostrar mensagem real.
+ */
+async function apiFetchWithError<T>(
+  url: string,
+  options?: RequestInit,
+): Promise<{ ok: boolean; data: T | null; error: string | null }> {
+  try {
+    const fullUrl = url.startsWith("http") ? url : `${API_BASE}${url}`;
+    const res = await fetch(fullUrl, options);
+    if (!res.ok) {
+      try {
+        const data = await res.json();
+        const errorMsg =
+          typeof data.detail === "string"
+            ? data.detail
+            : Array.isArray(data.detail) && data.detail[0]?.msg
+              ? data.detail[0].msg
+              : `Erro ${res.status}`;
+        return { ok: false, data: null, error: errorMsg };
+      } catch {
+        return { ok: false, data: null, error: `Erro ${res.status}` };
+      }
+    }
+    const data = await res.json();
+    return { ok: true, data, error: null };
+  } catch {
+    return {
+      ok: false,
+      data: null,
+      error: "Erro de conexão. Verifique sua internet.",
+    };
+  }
+}
+
 export default function PublicBooking() {
   const [step, setStep] = useState<Step>("info");
   const [submitting, setSubmitting] = useState(false);
@@ -167,7 +203,7 @@ export default function PublicBooking() {
     const timeFormatted =
       selectedTime.length === 5 ? selectedTime + ":00" : selectedTime;
 
-    const result = await apiFetch<{
+    const result = await apiFetchWithError<{
       id: number;
       professional_name: string;
       service_name: string;
@@ -191,11 +227,12 @@ export default function PublicBooking() {
 
     setSubmitting(false);
 
-    if (result) {
-      setBookingResult(result);
+    if (result.ok && result.data) {
+      setBookingResult(result.data);
       setStep("success");
     } else {
-      setError("Erro ao agendar. Horário pode já estar ocupado.");
+      // Mostra mensagem real do backend
+      setError(result.error || "Não foi possível agendar. Tente novamente.");
     }
   };
 
