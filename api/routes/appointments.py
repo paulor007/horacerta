@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from datetime import date
 from datetime import date as date_type
 from datetime import time as time_type
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from models.system_settings import SystemSettings
 
@@ -313,10 +313,11 @@ def create_appointment(
 @router.delete("/{appointment_id}")
 def cancel_appointment(
     appointment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Cancelar agendamento (janela configurável pelo settings)."""
+    """..."""
     apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not apt:
         raise HTTPException(status_code=404, detail="Agendamento não encontrado")
@@ -324,7 +325,6 @@ def cancel_appointment(
     if user.role == "client" and apt.client_id != user.id:
         raise HTTPException(status_code=403, detail="Só pode cancelar seus próprios agendamentos")
 
-    # Validação de janela de cancelamento (usa settings configurável)
     is_client = user.role == "client"
     can_cancel, error_msg = validate_can_cancel(db, apt, is_client=is_client)
     if not can_cancel:
@@ -339,16 +339,27 @@ def cancel_appointment(
         appointment_id, apt.status, user.id,
     )
 
-    # Notificar lista de espera (pode falhar sem afetar o cancelamento)
-    try:
+    # Captura dados antes de retornar (evita usar db fechado em background)
+    professional_id = apt.professional_id
+    apt_date = apt.date
+
+    # Notificar lista de espera em BACKGROUND (não trava o cancelamento)
+    def _notify_waitlist_bg():
+        from core.database import SessionLocal
         from api.routes.waitlist_routes import notify_waitlist_on_cancel
-        notify_waitlist_on_cancel(db, apt.professional_id, apt.date)
-    except Exception as e:
-        logger.warning("Waitlist notification failed: %s", e)
+        db_bg = SessionLocal()
+        try:
+            notify_waitlist_on_cancel(db_bg, professional_id, apt_date)
+        except Exception as e:
+            logger.warning("Waitlist notification failed: %s", e)
+        finally:
+            db_bg.close()
+
+    background_tasks.add_task(_notify_waitlist_bg)
 
     try:
         _broadcast_safe(ws_manager.broadcast_appointment_event(
-            "cancelled", apt.professional_id, {"id": appointment_id},
+            "cancelled", professional_id, {"id": appointment_id},
         ))
     except Exception:
         pass

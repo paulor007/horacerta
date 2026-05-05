@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from datetime import date as date_type
 from datetime import time as time_type
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session, joinedload
 
@@ -160,7 +160,12 @@ def public_availability(
 
 
 @router.post("/book", response_model=PublicBookingResponse, status_code=201)
-def public_book(data: PublicBookingRequest, request: Request, db: Session = Depends(get_db)):
+def public_book(
+    data: PublicBookingRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     check_rate_limit(request)
     check_booking_rate_limit(request)
 
@@ -249,17 +254,21 @@ def public_book(data: PublicBookingRequest, request: Request, db: Session = Depe
     db.commit()
     db.refresh(appointment)
 
-    # Notificação — tenta Celery, se falhar faz síncrono (senha NÃO se perde)
+    # Notificação em BACKGROUND (não trava o request)
+    # Cliente vê sucesso imediatamente; email vai por trás
     try:
         from tasks.reminders import notify_new_appointment
         logger.info(
-            "Iniciando envio de notificação para agendamento %s (cliente: %s, novo: %s)",
+            "Agendando notificação em background para agendamento %s (cliente: %s, novo: %s)",
             appointment.id, data.client_email, is_new_user,
         )
-        result = notify_new_appointment(appointment.id, plain_password)
-        logger.info("Notificação concluída: %s", result)
+        background_tasks.add_task(
+            notify_new_appointment,
+            appointment.id,
+            plain_password,
+        )
     except Exception as e:
-        logger.exception("Falha ao enviar notificação: %s", e)
+        logger.exception("Falha ao agendar notificação: %s", e)
 
     prof_name = prof.user.name if prof.user else f"Prof #{prof.id}"
 

@@ -31,7 +31,9 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "html"))
 
-        with smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT) as server:
+        # Timeout de 15s pra cada operação SMTP
+        # (evita travar o backend se Gmail estiver lento ou bloqueado)
+        with smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=15) as server:
             server.starttls()
             server.login(settings.EMAIL_USER, settings.EMAIL_PASSWORD)
             server.sendmail(settings.EMAIL_USER, to_email, msg.as_string())
