@@ -124,6 +124,20 @@ def client_user(db) -> User:
     db.refresh(user)
     return user
 
+@pytest.fixture
+def second_client_user(db):
+    """Cria SEGUNDO cliente pra testes que precisam de 2 clientes diferentes."""
+    user = User(
+        name="Cliente Dois",
+        email="cliente2@test.com",
+        hashed_password=hash_password("cliente123"),
+        role="client",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
 
 @pytest.fixture
 def professional(db, professional_user) -> Professional:

@@ -41,28 +41,61 @@ class TestCreateAppointment:
         assert data["professional_name"] == "Profissional Teste"
         assert data["service_name"] == "Corte"
 
-    def test_create_conflict(self, client, client_user, professional, service):
-        headers = auth_header(client, "cliente@test.com", "cliente123")
-        target_date = _next_weekday(2)  # próxima terça
+    def test_create_conflict(self, client, client_user, second_client_user, professional, service):
+        """
+        Testa que dois clientes DIFERENTES não podem agendar mesmo horário.
+        (cliente único bloqueia por anti-flood antes de chegar no conflict)
+        """
+        # Cliente 1 agenda
+        headers1 = auth_header(client, "cliente@test.com", "cliente123")
+        target_date = _next_weekday(2)
 
-        # Primeiro agendamento
         client.post("/api/v1/appointments", json={
             "professional_id": professional.id,
             "service_id": service.id,
             "date": target_date,
             "start_time": "14:00:00",
-        }, headers=headers)
+        }, headers=headers1)
 
-        # Mesmo horário — deve dar conflito
+        # Cliente 2 (DIFERENTE) tenta o mesmo horário — deve dar 409 (conflito)
+        headers2 = auth_header(client, "cliente2@test.com", "cliente123")
         response = client.post("/api/v1/appointments", json={
             "professional_id": professional.id,
             "service_id": service.id,
             "date": target_date,
             "start_time": "14:00:00",
-        }, headers=headers)
+        }, headers=headers2)
 
         assert response.status_code == 409
         assert "ocupado" in response.json()["detail"].lower()
+
+    def test_create_blocks_active_appointment(self, client, client_user, professional, service):
+        """
+        Testa o anti-flood: cliente que já tem agendamento ativo não pode criar outro.
+        """
+        headers = auth_header(client, "cliente@test.com", "cliente123")
+        target_date = _next_weekday(2)
+
+        # Primeiro agendamento (OK)
+        r1 = client.post("/api/v1/appointments", json={
+            "professional_id": professional.id,
+            "service_id": service.id,
+            "date": target_date,
+            "start_time": "14:00:00",
+        }, headers=headers)
+        assert r1.status_code == 201
+
+        # Segundo agendamento em outro horário — anti-flood bloqueia
+        target_date_2 = _next_weekday(3)
+        response = client.post("/api/v1/appointments", json={
+            "professional_id": professional.id,
+            "service_id": service.id,
+            "date": target_date_2,
+            "start_time": "10:00:00",
+        }, headers=headers)
+
+        assert response.status_code == 400
+        assert "ativo" in response.json()["detail"].lower()
 
     def test_create_outside_work_hours(self, client, client_user, professional, service):
         headers = auth_header(client, "cliente@test.com", "cliente123")
@@ -292,17 +325,33 @@ class TestMyAppointments:
     """GET /api/v1/appointments/my"""
 
     def test_list_own(self, client, client_user, professional, service):
+        """
+        Testa listagem própria. Por causa do anti-flood (1 ativo por cliente),
+        cancelamos o primeiro antes de criar o segundo para garantir 2 na lista.
+        """
         headers = auth_header(client, "cliente@test.com", "cliente123")
 
-        # Criar 2 agendamentos
-        for hour in ["10:00:00", "11:00:00"]:
-            client.post("/api/v1/appointments", json={
-                "professional_id": professional.id,
-                "service_id": service.id,
-                "date": _next_weekday(2),
-                "start_time": hour,
-            }, headers=headers)
+        # Cria primeiro agendamento
+        r1 = client.post("/api/v1/appointments", json={
+            "professional_id": professional.id,
+            "service_id": service.id,
+            "date": _next_weekday(2),
+            "start_time": "10:00:00",
+        }, headers=headers)
+        apt_id_1 = r1.json()["id"]
 
+        # Cancela o primeiro pra liberar anti-flood
+        client.delete(f"/api/v1/appointments/{apt_id_1}", headers=headers)
+
+        # Cria segundo agendamento
+        client.post("/api/v1/appointments", json={
+            "professional_id": professional.id,
+            "service_id": service.id,
+            "date": _next_weekday(3),
+            "start_time": "11:00:00",
+        }, headers=headers)
+
+        # Lista deve ter os 2 (um cancelado, um ativo)
         response = client.get("/api/v1/appointments/my", headers=headers)
         assert response.status_code == 200
         assert len(response.json()) == 2
