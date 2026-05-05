@@ -2,13 +2,10 @@
 Serviço de notificação — envia lembretes por email e WhatsApp.
 
 Canais:
-- Email: SMTP (funciona sem configuração extra)
+- Email: Resend API (HTTP) — funciona em qualquer hospedagem (Render, Vercel, Railway)
 - WhatsApp: Evolution API (requer servidor + QR Code)
 """
 
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 
 import requests
@@ -19,27 +16,50 @@ from models.notification import Notification
 
 
 def send_email(to_email: str, subject: str, body: str) -> bool:
-    """Envia email via SMTP."""
-    if not settings.EMAIL_USER or not settings.EMAIL_PASSWORD:
+    """Envia email via Resend API (HTTP).
+
+    Por que Resend e não SMTP?
+    O Render Free (e muitos providers gratuitos) BLOQUEIAM portas SMTP (587/465).
+    Resend usa API HTTP, então funciona em qualquer hospedagem.
+
+    Plano gratuito: 3.000 emails/mês.
+    Configurar:
+    - RESEND_API_KEY=re_XXXX (criar em https://resend.com/api-keys)
+    - EMAIL_FROM=onboarding@resend.dev (ou seu domínio verificado)
+    """
+    api_key = getattr(settings, "RESEND_API_KEY", "") or ""
+    email_from = getattr(settings, "EMAIL_FROM", "") or "onboarding@resend.dev"
+
+    if not api_key:
+        # Fallback: modo simulação se Resend não configurado
         print(f"  [EMAIL] Simulando envio para {to_email}: {subject}")
         return True
 
     try:
-        msg = MIMEMultipart()
-        msg["From"] = settings.EMAIL_USER
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "html"))
+        response = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": f"{settings.EMPRESA_NOME} <{email_from}>",
+                "to": [to_email],
+                "subject": subject,
+                "html": body,
+            },
+            timeout=15,
+        )
 
-        # Timeout de 15s pra cada operação SMTP
-        # (evita travar o backend se Gmail estiver lento ou bloqueado)
-        with smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=15) as server:
-            server.starttls()
-            server.login(settings.EMAIL_USER, settings.EMAIL_PASSWORD)
-            server.sendmail(settings.EMAIL_USER, to_email, msg.as_string())
-
-        print(f"  [EMAIL] Enviado para {to_email}: {subject}")
-        return True
+        if response.status_code in (200, 201, 202):
+            print(f"  [EMAIL] Enviado via Resend para {to_email}: {subject}")
+            return True
+        else:
+            print(f"  [EMAIL] Falha Resend ({response.status_code}) para {to_email}: {response.text[:200]}")
+            return False
+    except requests.exceptions.Timeout:
+        print(f"  [EMAIL] Timeout ao enviar para {to_email}")
+        return False
     except Exception as e:
         print(f"  [EMAIL] Erro ao enviar para {to_email}: {e}")
         return False

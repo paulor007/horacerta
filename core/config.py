@@ -16,7 +16,12 @@ class Settings(BaseSettings):
     # ── Redis / Celery ──
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # ── Email ──
+    # ── Email (Resend API HTTP — funciona em Render Free) ──
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "onboarding@resend.dev"
+
+    # ── Email SMTP (DEPRECATED — Render Free bloqueia SMTP) ──
+    # Mantido só pra compatibilidade com .env antigo.
     EMAIL_HOST: str = "smtp.gmail.com"
     EMAIL_PORT: int = 587
     EMAIL_USER: str = ""
